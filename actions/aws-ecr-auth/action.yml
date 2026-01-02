@@ -1,0 +1,40 @@
+name: 'AWS ECR Authentication'
+description: 'Configure AWS credentials via OIDC and login to Amazon ECR'
+author: 'Cognizant AI Lab'
+
+inputs:
+  aws-role-arn:
+    description: 'AWS IAM role ARN for OIDC authentication'
+    required: true
+  aws-region:
+    description: 'AWS region for ECR'
+    required: false
+    default: 'us-west-2'
+  role-session-name:
+    description: 'Session name for the assumed role (optional)'
+    required: false
+    default: 'github-actions'
+  role-duration-seconds:
+    description: 'Duration in seconds for the assumed role session (optional)'
+    required: false
+    default: '3600'
+
+outputs:
+  registry:
+    description: 'ECR registry URL'
+    value: ${{ steps.login-ecr.outputs.registry }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: ${{ inputs.role-session-name }}
+        role-duration-seconds: ${{ inputs.role-duration-seconds }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
