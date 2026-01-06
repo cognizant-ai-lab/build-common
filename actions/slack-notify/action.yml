@@ -11,8 +11,9 @@ inputs:
     required: false
     default: ''
   webhook-url:
-    description: 'Slack webhook URL'
-    required: true
+    description: 'Slack webhook URL (skips notification if empty/unavailable)'
+    required: false
+    default: ''
   channel:
     description: 'Slack channel to post to (optional, uses webhook default if not specified)'
     required: false
@@ -46,7 +47,7 @@ runs:
 
     - name: Determine notification details
       id: notification
-      if: ${{ inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true' }}
+      if: ${{ inputs.webhook-url != '' && (inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true') }}
       shell: bash
       run: |
         # Determine emoji and color based on status
@@ -93,7 +94,7 @@ runs:
         echo "mention=$MENTION" >> $GITHUB_OUTPUT
 
     - name: Send Slack notification
-      if: ${{ inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true' }}
+      if: ${{ inputs.webhook-url != '' && (inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true') }}
       uses: slackapi/slack-github-action@v2.0.0
       with:
         webhook: ${{ inputs.webhook-url }}
