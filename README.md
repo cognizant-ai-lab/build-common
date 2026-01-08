@@ -4,7 +4,7 @@ Reusable GitHub Actions building blocks for cognizant-ai-lab repositories.
 
 ## Overview
 
-This repository provides shared composite actions, reusable workflows, and scripts that can be used across the neuro* and ns* repositories to reduce duplication and standardize CI/CD practices.
+This repository provides shared composite actions, reusable workflows, and scripts that can be used across repositories to reduce duplication and standardize CI/CD practices.
 
 ## Documentation
 
