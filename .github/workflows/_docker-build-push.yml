@@ -1,0 +1,146 @@
+name: Docker Build and Push
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        description: 'Docker build context path'
+        required: false
+        type: string
+        default: '.'
+      dockerfile:
+        description: 'Path to Dockerfile'
+        required: false
+        type: string
+        default: 'Dockerfile'
+      image-name:
+        description: 'Image name (without registry prefix)'
+        required: true
+        type: string
+      tag:
+        description: 'Image tag (defaults to git SHA)'
+        required: false
+        type: string
+        default: ''
+      additional-tags:
+        description: 'Additional tags (newline separated)'
+        required: false
+        type: string
+        default: ''
+      build-args:
+        description: 'Docker build arguments (newline separated KEY=VALUE)'
+        required: false
+        type: string
+        default: ''
+      platforms:
+        description: 'Target platforms'
+        required: false
+        type: string
+        default: 'linux/amd64'
+      push:
+        description: 'Push image to registry'
+        required: false
+        type: boolean
+        default: true
+      aws-region:
+        description: 'AWS region for ECR'
+        required: false
+        type: string
+        default: 'us-west-2'
+    secrets:
+      AWS_ROLE_ARN:
+        description: 'AWS IAM role ARN for OIDC authentication'
+        required: true
+      SLACK_WEBHOOK_URL:
+        description: 'Slack webhook URL for notifications'
+        required: false
+    outputs:
+      image-uri:
+        description: 'Full image URI with tag'
+        value: ${{ jobs.build.outputs.image-uri }}
+      digest:
+        description: 'Image digest'
+        value: ${{ jobs.build.outputs.digest }}
+
+jobs:
+  build:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image-uri: ${{ steps.meta.outputs.image-uri }}
+      digest: ${{ steps.build-push.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to AWS and ECR
+        id: ecr-auth
+        uses: cognizant-ai-lab/build-common/actions/aws-ecr-auth@main
+        with:
+          aws-role-arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Compute image metadata
+        id: meta
+        shell: bash
+        run: |
+          REGISTRY="${{ steps.ecr-auth.outputs.registry }}"
+          IMAGE_NAME="${{ inputs.image-name }}"
+          
+          # Determine primary tag
+          if [ -n "${{ inputs.tag }}" ]; then
+            PRIMARY_TAG="${{ inputs.tag }}"
+          else
+            PRIMARY_TAG="${GITHUB_SHA}"
+          fi
+          
+          # Build tags list
+          TAGS="${REGISTRY}/${IMAGE_NAME}:${PRIMARY_TAG}"
+          
+          # Add additional tags
+          if [ -n "${{ inputs.additional-tags }}" ]; then
+            while IFS= read -r tag; do
+              if [ -n "$tag" ]; then
+                TAGS="${TAGS}
+          ${REGISTRY}/${IMAGE_NAME}:${tag}"
+              fi
+            done <<< "${{ inputs.additional-tags }}"
+          fi
+          
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "image-uri=${REGISTRY}/${IMAGE_NAME}:${PRIMARY_TAG}" >> $GITHUB_OUTPUT
+          
+          echo "Image tags:"
+          echo "$TAGS"
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: cognizant-ai-lab/build-common/actions/docker-buildx-push@main
+        with:
+          context: ${{ inputs.context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: ${{ inputs.build-args }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'Docker build failed for ${{ inputs.image-name }}'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on success
+        if: success() && inputs.push
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: success
+          message: 'Docker image pushed: ${{ steps.meta.outputs.image-uri }}'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}

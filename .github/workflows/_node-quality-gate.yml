@@ -1,0 +1,295 @@
+name: Node.js Quality Gate
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '22'
+      package-manager:
+        description: 'Package manager to use (yarn, npm, pnpm)'
+        required: false
+        type: string
+        default: 'yarn'
+      working-directory:
+        description: 'Working directory for the project'
+        required: false
+        type: string
+        default: '.'
+      run-lint:
+        description: 'Run linting (eslint)'
+        required: false
+        type: boolean
+        default: true
+      run-format-check:
+        description: 'Run format check (prettier)'
+        required: false
+        type: boolean
+        default: true
+      run-typecheck:
+        description: 'Run TypeScript type checking'
+        required: false
+        type: boolean
+        default: true
+      run-test:
+        description: 'Run tests (jest)'
+        required: false
+        type: boolean
+        default: true
+      run-build:
+        description: 'Run build'
+        required: false
+        type: boolean
+        default: false
+      run-knip:
+        description: 'Run knip for unused exports/dependencies'
+        required: false
+        type: boolean
+        default: false
+      run-shellcheck:
+        description: 'Run shellcheck on shell scripts'
+        required: false
+        type: boolean
+        default: false
+      run-hadolint:
+        description: 'Run hadolint on Dockerfiles'
+        required: false
+        type: boolean
+        default: false
+      lint-command:
+        description: 'Custom lint command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      format-check-command:
+        description: 'Custom format check command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      typecheck-command:
+        description: 'Custom typecheck command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      test-command:
+        description: 'Custom test command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      build-command:
+        description: 'Custom build command (overrides default)'
+        required: false
+        type: string
+        default: ''
+      coverage-threshold:
+        description: 'Minimum coverage threshold (0-100)'
+        required: false
+        type: number
+        default: 0
+    secrets:
+      SLACK_WEBHOOK_URL:
+        description: 'Slack webhook URL for notifications'
+        required: false
+      NPM_TOKEN:
+        description: 'NPM token for private packages'
+        required: false
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: cognizant-ai-lab/build-common/actions/setup-node-env@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager: ${{ inputs.package-manager }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Run ESLint
+        if: ${{ inputs.run-lint }}
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.lint-command }}" ]; then
+            ${{ inputs.lint-command }}
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn lint
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run lint
+          else
+            pnpm lint
+          fi
+
+      - name: Run Prettier check
+        if: ${{ inputs.run-format-check }}
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.format-check-command }}" ]; then
+            ${{ inputs.format-check-command }}
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn check-format || yarn format:check || yarn prettier --check .
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run check-format || npm run format:check || npx prettier --check .
+          else
+            pnpm check-format || pnpm format:check || pnpm prettier --check .
+          fi
+
+      - name: Run knip
+        if: ${{ inputs.run-knip }}
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn knip
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run knip
+          else
+            pnpm knip
+          fi
+
+      - name: Run shellcheck
+        if: ${{ inputs.run-shellcheck }}
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          find . -name "*.sh" -type f | xargs shellcheck --severity=warning
+
+      - name: Run hadolint
+        if: ${{ inputs.run-hadolint }}
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ inputs.working-directory }}/Dockerfile
+          failure-threshold: warning
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'Lint checks failed'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run-typecheck }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: cognizant-ai-lab/build-common/actions/setup-node-env@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager: ${{ inputs.package-manager }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Run TypeScript check
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.typecheck-command }}" ]; then
+            ${{ inputs.typecheck-command }}
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn tsc --noEmit || yarn typecheck || yarn type-check
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run tsc -- --noEmit || npm run typecheck || npm run type-check
+          else
+            pnpm tsc --noEmit || pnpm typecheck || pnpm type-check
+          fi
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'TypeScript check failed'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run-test }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: cognizant-ai-lab/build-common/actions/setup-node-env@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager: ${{ inputs.package-manager }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Run tests
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.test-command }}" ]; then
+            ${{ inputs.test-command }}
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn test
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm test
+          else
+            pnpm test
+          fi
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'Tests failed'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run-build }}
+    needs: [lint, typecheck, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: cognizant-ai-lab/build-common/actions/setup-node-env@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager: ${{ inputs.package-manager }}
+          working-directory: ${{ inputs.working-directory }}
+
+      - name: Run build
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          if [ -n "${{ inputs.build-command }}" ]; then
+            ${{ inputs.build-command }}
+          elif [ "${{ inputs.package-manager }}" = "yarn" ]; then
+            yarn build
+          elif [ "${{ inputs.package-manager }}" = "npm" ]; then
+            npm run build
+          else
+            pnpm build
+          fi
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'Build failed'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  notify-success:
+    name: Notify Success
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    if: ${{ always() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    steps:
+      - name: Notify Slack on success
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: success
+          message: 'Node.js quality gate passed'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}

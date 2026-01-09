@@ -1,0 +1,70 @@
+name: CodeQL Analysis
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: 'Languages to analyze (comma-separated: javascript, python, etc.)'
+        required: false
+        type: string
+        default: 'javascript'
+      build-mode:
+        description: 'Build mode for compiled languages (none, autobuild, manual)'
+        required: false
+        type: string
+        default: 'none'
+      config-file:
+        description: 'Path to CodeQL config file (optional)'
+        required: false
+        type: string
+        default: ''
+      queries:
+        description: 'Additional queries to run (security-extended, security-and-quality)'
+        required: false
+        type: string
+        default: 'security-extended'
+    secrets:
+      SLACK_WEBHOOK_URL:
+        description: 'Slack webhook URL for notifications'
+        required: false
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJson(format('["{0}"]', join(fromJson(format('["{0}"]', inputs.languages)), '","'))) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: ${{ inputs.queries }}
+          config-file: ${{ inputs.config-file || '' }}
+
+      - name: Autobuild
+        if: ${{ inputs.build-mode == 'autobuild' }}
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: cognizant-ai-lab/build-common/actions/slack-notify@main
+        with:
+          status: failure
+          message: 'CodeQL analysis failed for ${{ matrix.language }}'
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
