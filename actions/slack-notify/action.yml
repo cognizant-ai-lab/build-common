@@ -109,7 +109,7 @@ runs:
                     "type": "section",
                     "text": {
                       "type": "mrkdwn",
-                      "text": "${{ steps.notification.outputs.mention }}:${{ steps.notification.outputs.emoji }}: *${{ steps.notification.outputs.message }}* for `${{ github.repository }}` on `${{ github.ref_name }}`"
+                      "text": "${{ steps.notification.outputs.mention }}:${{ steps.notification.outputs.emoji }}: *${{ steps.notification.outputs.message }}* for `${{ github.repository }}` on `${{ github.ref_name }}`\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View build run>"
                     }
                   },
                   {
@@ -117,7 +117,7 @@ runs:
                     "elements": [
                       {
                         "type": "mrkdwn",
-                        "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run> | Triggered by: ${{ github.actor }}"
+                        "text": "Workflow: ${{ github.workflow }} | Triggered by: ${{ github.actor }}"
                       }
                     ]
                   }
