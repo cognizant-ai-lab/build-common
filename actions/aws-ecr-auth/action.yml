@@ -27,6 +27,15 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Validate AWS role ARN
+      shell: bash
+      run: |
+        ARN="${{ inputs.aws-role-arn }}"
+        if [[ ! "$ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
+          echo "::error::Invalid aws-role-arn: $ARN (expected arn:aws:iam::<account-id>:role/<role-name>)"
+          exit 1
+        fi
+
     - name: Configure AWS credentials via OIDC
       uses: aws-actions/configure-aws-credentials@v4
       with:
