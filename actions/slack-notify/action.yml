@@ -14,10 +14,6 @@ inputs:
     description: 'Slack webhook URL (skips notification if empty/unavailable)'
     required: false
     default: ''
-  channel:
-    description: 'Slack channel to post to (optional, uses webhook default if not specified)'
-    required: false
-    default: ''
   skip-on-fork:
     description: 'Skip notification for fork PRs (default: true)'
     required: false
