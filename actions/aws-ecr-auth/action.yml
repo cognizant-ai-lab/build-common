@@ -1,5 +1,8 @@
+---
 name: 'AWS ECR Authentication'
-description: 'Configure AWS credentials via OIDC and login to Amazon ECR'
+description: >-
+  Configure AWS credentials via OIDC
+  and login to Amazon ECR
 author: 'Cognizant AI Lab'
 
 inputs:
@@ -29,10 +32,15 @@ runs:
   steps:
     - name: Validate AWS role ARN
       shell: bash
+      env:
+        ARN: ${{ inputs.aws-role-arn }}
       run: |
-        ARN="${{ inputs.aws-role-arn }}"
-        if [[ ! "$ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
-          echo "::error::Invalid aws-role-arn: $ARN (expected arn:aws:iam::<account-id>:role/<role-name>)"
+        PATTERN='^arn:aws:iam::[0-9]{12}:role/.+'
+        if [[ ! "$ARN" =~ $PATTERN ]]; then
+          MSG="Invalid aws-role-arn"
+          MSG="${MSG} (expected arn:aws:iam::"
+          MSG="${MSG}<account-id>:role/<role-name>)"
+          echo "::error::${MSG}"
           exit 1
         fi
 

@@ -1,5 +1,8 @@
+---
 name: 'Docker Buildx Push'
-description: 'Build and push Docker image using buildx with GitHub Actions cache support'
+description: >-
+  Build and push Docker image using buildx
+  with GitHub Actions cache support
 author: 'Cognizant AI Lab'
 
 inputs:

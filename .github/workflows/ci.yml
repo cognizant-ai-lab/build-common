@@ -1,6 +1,7 @@
+---
 name: CI
 
-on:
+"on":
   push:
     branches: [main]
   pull_request:
@@ -19,8 +20,11 @@ jobs:
       - name: Install actionlint
         shell: bash
         run: |
-          bash <(curl --silent --show-error --location https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          echo "$(pwd)" >> "$GITHUB_PATH"
+          URL="https://raw.githubusercontent.com"
+          URL="${URL}/rhysd/actionlint/main"
+          URL="${URL}/scripts/download-actionlint.bash"
+          bash <(curl --silent --show-error --location "$URL")
+          pwd >> "$GITHUB_PATH"
 
       - name: Run actionlint on reusable workflows
         shell: bash
