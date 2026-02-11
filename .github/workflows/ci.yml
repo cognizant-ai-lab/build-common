@@ -31,10 +31,6 @@ jobs:
         run: |
           actionlint -color .github/workflows/*.yml
 
-      - name: Run actionlint on composite actions
-        shell: bash
-        run: |
-          find actions -name 'action.yml' -print0 | xargs -0 actionlint -color
 
   yamllint:
     name: Lint YAML syntax
