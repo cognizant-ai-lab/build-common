@@ -63,7 +63,8 @@ runs:
           echo "Installing dependencies from ${{ inputs.requirements-file }}"
           pip install -r "${{ inputs.requirements-file }}"
         else
-          echo "Warning: ${{ inputs.requirements-file }} not found"
+          echo "::error::Required file ${{ inputs.requirements-file }} not found"
+          exit 1
         fi
 
     - name: Install build dependencies
@@ -75,7 +76,8 @@ runs:
           echo "Installing build dependencies from ${{ inputs.requirements-build-file }}"
           pip install -r "${{ inputs.requirements-build-file }}"
         else
-          echo "Warning: ${{ inputs.requirements-build-file }} not found"
+          echo "::error::Required file ${{ inputs.requirements-build-file }} not found"
+          exit 1
         fi
 
     - name: Install extra packages

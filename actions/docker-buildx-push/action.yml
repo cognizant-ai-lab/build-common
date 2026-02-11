@@ -53,7 +53,7 @@ inputs:
   quiet:
     description: 'Suppress build output'
     required: false
-    default: 'true'
+    default: 'false'
 
 outputs:
   digest:
