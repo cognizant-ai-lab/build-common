@@ -1,5 +1,8 @@
 name: 'Setup Node.js Environment'
-description: 'Setup Node.js with yarn via corepack and caching'
+description: >
+  Setup Node.js with yarn via corepack and dependency
+  caching. Only yarn is supported at this time; npm and
+  pnpm support can be added later if needed.
 author: 'Cognizant AI Lab'
 
 inputs:
@@ -7,10 +10,6 @@ inputs:
     description: 'Node.js version to use'
     required: false
     default: '22'
-  package-manager:
-    description: 'Package manager to use (yarn, npm, pnpm)'
-    required: false
-    default: 'yarn'
   working-directory:
     description: 'Working directory for installing dependencies'
     required: false
@@ -20,7 +19,7 @@ inputs:
     required: false
     default: 'true'
   use-corepack:
-    description: 'Enable corepack for yarn/pnpm version management'
+    description: 'Enable corepack for yarn version management'
     required: false
     default: 'true'
   clean-install:
@@ -54,14 +53,8 @@ runs:
       run: |
         corepack enable
         if [ -f "package.json" ]; then
-          # Install the package manager version specified in package.json
           corepack install
-          echo "Package manager version:"
-          if [ "${{ inputs.package-manager }}" = "yarn" ]; then
-            yarn --version
-          elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-            pnpm --version
-          fi
+          echo "Yarn version: $(yarn --version)"
         fi
 
     - name: Setup Node.js ${{ inputs.node-version }}
@@ -69,7 +62,7 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: ${{ inputs.use-cache == 'true' && inputs.package-manager || '' }}
+        cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
         cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
         registry-url: ${{ inputs.registry-url }}
         scope: ${{ inputs.scope }}
@@ -81,37 +74,18 @@ runs:
       run: |
         echo "Cleaning node_modules and cache..."
         rm -rf node_modules
-        if [ "${{ inputs.package-manager }}" = "yarn" ]; then
-          yarn cache clean --all 2>/dev/null || true
-        elif [ "${{ inputs.package-manager }}" = "npm" ]; then
-          npm cache clean --force 2>/dev/null || true
-        elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-          pnpm store prune 2>/dev/null || true
-        fi
+        yarn cache clean --all 2>/dev/null || true
 
     - name: Install dependencies
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        echo "Installing dependencies with ${{ inputs.package-manager }}..."
-        if [ "${{ inputs.package-manager }}" = "yarn" ]; then
-          yarn install
-        elif [ "${{ inputs.package-manager }}" = "npm" ]; then
-          npm ci
-        elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-          pnpm install --frozen-lockfile
-        fi
+        echo "Installing dependencies with yarn..."
+        yarn install
 
     - name: Show installed packages
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
         echo "Node.js version: $(node --version)"
-        echo "Package manager: ${{ inputs.package-manager }}"
-        if [ "${{ inputs.package-manager }}" = "yarn" ]; then
-          echo "Yarn version: $(yarn --version)"
-        elif [ "${{ inputs.package-manager }}" = "npm" ]; then
-          echo "npm version: $(npm --version)"
-        elif [ "${{ inputs.package-manager }}" = "pnpm" ]; then
-          echo "pnpm version: $(pnpm --version)"
-        fi
+        echo "Yarn version: $(yarn --version)"

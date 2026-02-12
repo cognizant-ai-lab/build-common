@@ -105,13 +105,14 @@ Setup Python environment with dependencies and pip caching.
 ### setup-node-env
 
 Setup Node.js environment with yarn via corepack and caching.
+Only yarn is supported at this time; npm and pnpm support can
+be added later if needed.
 
 ```yaml
 - name: Setup Node.js
   uses: cognizant-ai-lab/build-common/actions/setup-node-env@main
   with:
     node-version: '22'
-    package-manager: 'yarn'  # yarn, npm, or pnpm
     # Optional inputs:
     working-directory: '.'
     use-cache: 'true'
