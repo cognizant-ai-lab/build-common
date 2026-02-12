@@ -1,28 +1,36 @@
+---
 name: 'Slack Notify'
-description: 'Send Slack notification with fork detection to skip notifications on fork PRs'
+description: >-
+  Send Slack notification with fork detection
+  to skip notifications on fork PRs
 author: 'Cognizant AI Lab'
 
 inputs:
   status:
-    description: 'Job status (success, failure, cancelled)'
+    description: >-
+      Job status (success, failure, cancelled)
     required: true
   message:
-    description: 'Custom message to include in notification (optional)'
+    description: >-
+      Custom message to include in notification
+      (optional)
     required: false
     default: ''
   webhook-url:
-    description: 'Slack webhook URL'
-    required: true
-  channel:
-    description: 'Slack channel to post to (optional, uses webhook default if not specified)'
+    description: >-
+      Slack webhook URL
+      (skips notification if empty/unavailable)
     required: false
     default: ''
   skip-on-fork:
-    description: 'Skip notification for fork PRs (default: true)'
+    description: >-
+      Skip notification for fork PRs
+      (default: true)
     required: false
     default: 'true'
   mention-on-failure:
-    description: 'Mention @channel on failure (default: false)'
+    description: >-
+      Mention @channel on failure (default: false)
     required: false
     default: 'false'
 
@@ -33,24 +41,41 @@ runs:
       id: fork-check
       shell: bash
       run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "is_fork=true" >> $GITHUB_OUTPUT
-            echo "Detected fork PR - notifications will be skipped"
+        EVENT="${{ github.event_name }}"
+        if [ "$EVENT" = "pull_request" ]; then
+          HEAD="${{ github.event.pull_request.head.repo.full_name }}"
+          SELF="${{ github.repository }}"
+          if [ "$HEAD" != "$SELF" ]; then
+            echo "is_fork=true" >> "$GITHUB_OUTPUT"
+            echo "Detected fork PR - will be skipped"
           else
-            echo "is_fork=false" >> $GITHUB_OUTPUT
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
           fi
         else
-          echo "is_fork=false" >> $GITHUB_OUTPUT
+          echo "is_fork=false" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Determine notification details
+    - name: Build notification payload
       id: notification
-      if: ${{ inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true' }}
+      if: >-
+        ${{
+          inputs.webhook-url != '' &&
+          (inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true')
+        }}
       shell: bash
+      env:
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_MENTION: ${{ inputs.mention-on-failure }}
+        GH_REPO: ${{ github.repository }}
+        GH_REF: ${{ github.ref_name }}
+        GH_SERVER: ${{ github.server_url }}
+        GH_RUN_ID: ${{ github.run_id }}
+        GH_WORKFLOW: ${{ github.workflow }}
+        GH_ACTOR: ${{ github.actor }}
       run: |
-        # Determine emoji and color based on status
-        case "${{ inputs.status }}" in
+        case "$INPUT_STATUS" in
           success)
             EMOJI="white_check_mark"
             COLOR="good"
@@ -69,46 +94,52 @@ runs:
           *)
             EMOJI="grey_question"
             COLOR="#808080"
-            STATUS_TEXT="${{ inputs.status }}"
+            STATUS_TEXT="$INPUT_STATUS"
             ;;
         esac
-        
-        echo "emoji=$EMOJI" >> $GITHUB_OUTPUT
-        echo "color=$COLOR" >> $GITHUB_OUTPUT
-        echo "status_text=$STATUS_TEXT" >> $GITHUB_OUTPUT
-        
-        # Build message
-        if [ -n "${{ inputs.message }}" ]; then
-          MESSAGE="${{ inputs.message }}"
+
+        if [ -n "$INPUT_MESSAGE" ]; then
+          MESSAGE="$INPUT_MESSAGE"
         else
           MESSAGE="$STATUS_TEXT"
         fi
-        echo "message=$MESSAGE" >> $GITHUB_OUTPUT
-        
-        # Add mention if requested on failure
+
         MENTION=""
-        if [ "${{ inputs.status }}" = "failure" ] && [ "${{ inputs.mention-on-failure }}" = "true" ]; then
+        if [ "$INPUT_STATUS" = "failure" ] && \
+           [ "$INPUT_MENTION" = "true" ]; then
           MENTION="<!channel> "
         fi
-        echo "mention=$MENTION" >> $GITHUB_OUTPUT
 
-    - name: Send Slack notification
-      if: ${{ inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true' }}
-      uses: slackapi/slack-github-action@v2.0.0
-      with:
-        webhook: ${{ inputs.webhook-url }}
-        webhook-type: incoming-webhook
-        payload: |
-          {
+        RUN_URL="${GH_SERVER}/${GH_REPO}"
+        RUN_URL="${RUN_URL}/actions/runs/${GH_RUN_ID}"
+
+        PAYLOAD=$(jq --null-input \
+          --arg color "$COLOR" \
+          --arg mention "$MENTION" \
+          --arg emoji "$EMOJI" \
+          --arg message "$MESSAGE" \
+          --arg repo "$GH_REPO" \
+          --arg ref "$GH_REF" \
+          --arg run_url "$RUN_URL" \
+          --arg workflow "$GH_WORKFLOW" \
+          --arg actor "$GH_ACTOR" \
+          '{
             "attachments": [
               {
-                "color": "${{ steps.notification.outputs.color }}",
+                "color": $color,
                 "blocks": [
                   {
                     "type": "section",
                     "text": {
                       "type": "mrkdwn",
-                      "text": "${{ steps.notification.outputs.mention }}:${{ steps.notification.outputs.emoji }}: *${{ steps.notification.outputs.message }}* for `${{ github.repository }}` on `${{ github.ref_name }}`"
+                      "text": (
+                        $mention + ":" + $emoji
+                        + ": *" + $message
+                        + "* for `" + $repo
+                        + "` on `" + $ref
+                        + "`\n<" + $run_url
+                        + "|View build run>"
+                      )
                     }
                   },
                   {
@@ -116,11 +147,33 @@ runs:
                     "elements": [
                       {
                         "type": "mrkdwn",
-                        "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run> | Triggered by: ${{ github.actor }}"
+                        "text": (
+                          "Workflow: " + $workflow
+                          + " | Triggered by: "
+                          + $actor
+                        )
                       }
                     ]
                   }
                 ]
               }
             ]
-          }
+          }')
+
+        echo "payload<<PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+        echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
+        echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Send Slack notification
+      if: >-
+        ${{
+          inputs.webhook-url != '' &&
+          (inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true')
+        }}
+      uses: slackapi/slack-github-action@v2.0.0
+      with:
+        webhook: ${{ inputs.webhook-url }}
+        webhook-type: incoming-webhook
+        payload: >-
+          ${{ steps.notification.outputs.payload }}

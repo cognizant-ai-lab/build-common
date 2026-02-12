@@ -1,0 +1,49 @@
+---
+name: CI
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: Lint GitHub Actions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install actionlint
+        shell: bash
+        run: |
+          URL="https://raw.githubusercontent.com"
+          URL="${URL}/rhysd/actionlint/main"
+          URL="${URL}/scripts/download-actionlint.bash"
+          bash <(curl --silent --show-error --location "$URL")
+          pwd >> "$GITHUB_PATH"
+
+      - name: Run actionlint on reusable workflows
+        shell: bash
+        run: |
+          actionlint -color .github/workflows/*.yml
+
+
+  yamllint:
+    name: Lint YAML syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        shell: bash
+        run: |
+          pip install yamllint
+
+      - name: Run yamllint
+        shell: bash
+        run: |
+          yamllint --strict .github/workflows/ actions/

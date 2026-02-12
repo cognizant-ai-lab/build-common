@@ -1,5 +1,6 @@
+---
 name: 'Setup Node.js Environment'
-description: >
+description: >-
   Setup Node.js with yarn via corepack and dependency
   caching. Only yarn is supported at this time; npm and
   pnpm support can be added later if needed.

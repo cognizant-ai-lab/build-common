@@ -1,5 +1,7 @@
+---
 name: 'Setup Python Environment'
-description: 'Setup Python with dependencies and pip caching'
+description: >-
+  Setup Python with dependencies and pip caching
 author: 'Cognizant AI Lab'
 
 inputs:
@@ -12,7 +14,9 @@ inputs:
     required: false
     default: 'requirements.txt'
   requirements-build-file:
-    description: 'Path to requirements-build.txt file (optional, for dev dependencies)'
+    description: >-
+      Path to requirements-build.txt file
+      (optional, for dev dependencies)
     required: false
     default: ''
   working-directory:
@@ -47,7 +51,11 @@ runs:
         cache: ${{ inputs.use-cache == 'true' && 'pip' || '' }}
         cache-dependency-path: |
           ${{ inputs.working-directory }}/${{ inputs.requirements-file }}
-          ${{ inputs.requirements-build-file != '' && format('{0}/{1}', inputs.working-directory, inputs.requirements-build-file) || '' }}
+          ${{ inputs.requirements-build-file != '' &&
+            format('{0}/{1}',
+              inputs.working-directory,
+              inputs.requirements-build-file
+            ) || '' }}
 
     - name: Upgrade pip
       shell: bash
@@ -63,7 +71,9 @@ runs:
           echo "Installing dependencies from ${{ inputs.requirements-file }}"
           pip install -r "${{ inputs.requirements-file }}"
         else
-          echo "Warning: ${{ inputs.requirements-file }} not found"
+          FILE="${{ inputs.requirements-file }}"
+          echo "::error::Required file ${FILE} not found"
+          exit 1
         fi
 
     - name: Install build dependencies
@@ -71,11 +81,13 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        if [ -f "${{ inputs.requirements-build-file }}" ]; then
-          echo "Installing build dependencies from ${{ inputs.requirements-build-file }}"
-          pip install -r "${{ inputs.requirements-build-file }}"
+        FILE="${{ inputs.requirements-build-file }}"
+        if [ -f "$FILE" ]; then
+          echo "Installing build deps from ${FILE}"
+          pip install -r "$FILE"
         else
-          echo "Warning: ${{ inputs.requirements-build-file }} not found"
+          echo "::error::Required file ${FILE} not found"
+          exit 1
         fi
 
     - name: Install extra packages
