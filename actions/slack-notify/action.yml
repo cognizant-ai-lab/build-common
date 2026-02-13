@@ -40,12 +40,14 @@ runs:
     - name: Check if fork
       id: fork-check
       shell: bash
+      env:
+        GH_EVENT: ${{ github.event_name }}
+        GH_HEAD_REPO: >-
+          ${{ github.event.pull_request.head.repo.full_name }}
+        GH_SELF_REPO: ${{ github.repository }}
       run: |
-        EVENT="${{ github.event_name }}"
-        if [ "$EVENT" = "pull_request" ]; then
-          HEAD="${{ github.event.pull_request.head.repo.full_name }}"
-          SELF="${{ github.repository }}"
-          if [ "$HEAD" != "$SELF" ]; then
+        if [ "$GH_EVENT" = "pull_request" ]; then
+          if [ "$GH_HEAD_REPO" != "$GH_SELF_REPO" ]; then
             echo "is_fork=true" >> "$GITHUB_OUTPUT"
             echo "Detected fork PR - will be skipped"
           else
