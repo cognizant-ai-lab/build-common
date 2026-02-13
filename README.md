@@ -48,13 +48,16 @@ Send Slack notifications with automatic fork detection to skip notifications on 
 ### aws-ecr-auth
 
 Configure AWS credentials via OIDC and login to Amazon ECR.
+The ARN is constructed from `aws-account-id` and `aws-role-name`
+to match existing repo-level variable conventions.
 
 ```yaml
 - name: Authenticate to AWS and ECR
   id: ecr-auth
   uses: cognizant-ai-lab/build-common/actions/aws-ecr-auth@main
   with:
-    aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+    aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+    aws-role-name: ${{ vars.AWS_ROLE_NAME }}
     aws-region: us-west-2  # Optional, defaults to us-west-2
 
 # Use the registry output

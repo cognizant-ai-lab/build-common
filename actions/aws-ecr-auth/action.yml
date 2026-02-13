@@ -6,19 +6,25 @@ description: >-
 author: 'Cognizant AI Lab'
 
 inputs:
-  aws-role-arn:
-    description: 'AWS IAM role ARN for OIDC authentication'
+  aws-account-id:
+    description: 'AWS account ID (12-digit)'
+    required: true
+  aws-role-name:
+    description: 'IAM role name for OIDC authentication'
     required: true
   aws-region:
     description: 'AWS region for ECR'
     required: false
     default: 'us-west-2'
   role-session-name:
-    description: 'Session name for the assumed role (optional)'
+    description: >-
+      Session name for the assumed role (optional)
     required: false
     default: 'github-actions'
   role-duration-seconds:
-    description: 'Duration in seconds for the assumed role session (optional)'
+    description: >-
+      Duration in seconds for the assumed role
+      session (optional)
     required: false
     default: '3600'
 
@@ -30,24 +36,30 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Validate AWS role ARN
+    - name: Validate inputs and build ARN
+      id: arn
       shell: bash
       env:
-        ARN: ${{ inputs.aws-role-arn }}
+        INPUT_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+        INPUT_ROLE_NAME: ${{ inputs.aws-role-name }}
       run: |
-        PATTERN='^arn:aws:iam::[0-9]{12}:role/.+'
-        if [[ ! "$ARN" =~ $PATTERN ]]; then
-          MSG="Invalid aws-role-arn"
-          MSG="${MSG} (expected arn:aws:iam::"
-          MSG="${MSG}<account-id>:role/<role-name>)"
-          echo "::error::${MSG}"
+        ACCT_PATTERN='^[0-9]{12}$'
+        if [[ ! "$INPUT_ACCOUNT_ID" =~ $ACCT_PATTERN ]]; then
+          echo "::error::Invalid aws-account-id (expected 12 digits)"
           exit 1
         fi
+        if [ -z "$INPUT_ROLE_NAME" ]; then
+          echo "::error::aws-role-name must not be empty"
+          exit 1
+        fi
+        ARN="arn:aws:iam::${INPUT_ACCOUNT_ID}"
+        ARN="${ARN}:role/${INPUT_ROLE_NAME}"
+        echo "role-arn=${ARN}" >> "$GITHUB_OUTPUT"
 
     - name: Configure AWS credentials via OIDC
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ inputs.aws-role-arn }}
+        role-to-assume: ${{ steps.arn.outputs.role-arn }}
         aws-region: ${{ inputs.aws-region }}
         role-session-name: ${{ inputs.role-session-name }}
         role-duration-seconds: ${{ inputs.role-duration-seconds }}
