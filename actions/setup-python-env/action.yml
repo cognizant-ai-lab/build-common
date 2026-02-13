@@ -50,7 +50,11 @@ runs:
         python-version: ${{ inputs.python-version }}
         cache: ${{ inputs.use-cache == 'true' && 'pip' || '' }}
         cache-dependency-path: |
-          ${{ inputs.working-directory }}/${{ inputs.requirements-file }}
+          ${{ inputs.requirements-file != '' &&
+            format('{0}/{1}',
+              inputs.working-directory,
+              inputs.requirements-file
+            ) || '' }}
           ${{ inputs.requirements-build-file != '' &&
             format('{0}/{1}',
               inputs.working-directory,
@@ -63,7 +67,8 @@ runs:
       run: |
         python -m pip install --upgrade pip
 
-    - name: Install dependencies from requirements.txt
+    - name: Install dependencies from requirements file
+      if: ${{ inputs.requirements-file != '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
