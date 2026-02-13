@@ -66,13 +66,14 @@ runs:
     - name: Install dependencies from requirements.txt
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REQ_FILE: ${{ inputs.requirements-file }}
       run: |
-        if [ -f "${{ inputs.requirements-file }}" ]; then
-          echo "Installing dependencies from ${{ inputs.requirements-file }}"
-          pip install -r "${{ inputs.requirements-file }}"
+        if [ -f "$INPUT_REQ_FILE" ]; then
+          echo "Installing from ${INPUT_REQ_FILE}"
+          pip install -r "$INPUT_REQ_FILE"
         else
-          FILE="${{ inputs.requirements-file }}"
-          echo "::error::Required file ${FILE} not found"
+          echo "::error::Required file ${INPUT_REQ_FILE} not found"
           exit 1
         fi
 
@@ -80,13 +81,14 @@ runs:
       if: ${{ inputs.requirements-build-file != '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_BUILD_FILE: ${{ inputs.requirements-build-file }}
       run: |
-        FILE="${{ inputs.requirements-build-file }}"
-        if [ -f "$FILE" ]; then
-          echo "Installing build deps from ${FILE}"
-          pip install -r "$FILE"
+        if [ -f "$INPUT_BUILD_FILE" ]; then
+          echo "Installing build deps from ${INPUT_BUILD_FILE}"
+          pip install -r "$INPUT_BUILD_FILE"
         else
-          echo "::error::Required file ${FILE} not found"
+          echo "::error::Required file ${INPUT_BUILD_FILE} not found"
           exit 1
         fi
 
@@ -94,9 +96,11 @@ runs:
       if: ${{ inputs.install-extras != '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_EXTRAS: ${{ inputs.install-extras }}
       run: |
-        echo "Installing extra packages: ${{ inputs.install-extras }}"
-        pip install ${{ inputs.install-extras }}
+        echo "Installing extra packages: ${INPUT_EXTRAS}"
+        pip install $INPUT_EXTRAS
 
     - name: Show installed packages
       shell: bash
