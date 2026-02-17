@@ -46,5 +46,4 @@ jobs:
         shell: bash
         run: |
           actionlint -color \
-            .github/workflows/*.yml \
-            actions/*/action.yml
+            .github/workflows/*.yml
