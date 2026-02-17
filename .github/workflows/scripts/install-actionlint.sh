@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Downloads and installs a pinned version of actionlint using the official
 # install script from the rhysd/actionlint GitHub repository.
+# The version is passed as the first argument and is expected to come from
+# the ACTIONLINT_VERSION GitHub repository variable (vars.ACTIONLINT_VERSION).
 set -euo pipefail
 
 VERSION="${1:?Usage: install-actionlint.sh <version>}"
