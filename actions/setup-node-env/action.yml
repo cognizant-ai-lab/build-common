@@ -82,7 +82,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         echo "Installing dependencies with yarn..."
-        yarn install
+        yarn install --immutable
 
     - name: Show installed packages
       shell: bash
