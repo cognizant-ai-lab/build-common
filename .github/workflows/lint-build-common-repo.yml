@@ -11,6 +11,23 @@ permissions:
   contents: read
 
 jobs:
+  yamllint:
+    name: Lint YAML syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        shell: bash
+        run: |
+          pip install yamllint
+
+      - name: Run yamllint
+        shell: bash
+        run: |
+          yamllint --strict .github/workflows/ actions/
+
+
   actionlint:
     name: Lint GitHub Actions
     runs-on: ubuntu-latest
@@ -31,20 +48,3 @@ jobs:
           actionlint -color \
             .github/workflows/*.yml \
             actions/*/action.yml
-
-
-  yamllint:
-    name: Lint YAML syntax
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install yamllint
-        shell: bash
-        run: |
-          pip install yamllint
-
-      - name: Run yamllint
-        shell: bash
-        run: |
-          yamllint --strict .github/workflows/ actions/
