@@ -25,10 +25,12 @@ jobs:
           .github/workflows/scripts/install-actionlint.sh \
             "$ACTIONLINT_VERSION"
 
-      - name: Run actionlint on reusable workflows
+      - name: Run actionlint
         shell: bash
         run: |
-          actionlint -color .github/workflows/*.yml
+          actionlint -color \
+            .github/workflows/*.yml \
+            actions/*/action.yml
 
 
   yamllint:
