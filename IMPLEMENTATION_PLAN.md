@@ -316,8 +316,12 @@ inputs:
     required: false
     default: 'us-west-2'
     type: string
-  aws-role-arn:
-    description: 'AWS IAM role ARN for OIDC'
+  aws-account-id:
+    description: 'AWS account ID (12-digit)'
+    required: true
+    type: string
+  aws-role-name:
+    description: 'IAM role name for OIDC authentication'
     required: true
     type: string
   build-args:
@@ -399,43 +403,18 @@ inputs:
 
 **Current Duplication:** All Python repos have similar dependency installation patterns
 
-```yaml
-# actions/setup-python-env/action.yml
-name: 'Setup Python Environment'
-description: 'Setup Python with dependencies and caching'
-inputs:
-  python-version:
-    description: 'Python version'
-    required: false
-    default: '3.12'
-  requirements-file:
-    description: 'Path to requirements.txt'
-    required: false
-    default: 'requirements.txt'
-  requirements-build-file:
-    description: 'Path to requirements-build.txt'
-    required: false
-    default: 'requirements-build.txt'
-  use-venv:
-    description: 'Use virtual environment'
-    required: false
-    default: 'false'
-runs:
-  using: 'composite'
-  steps:
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.python-version }}
-        cache: 'pip'
-    - name: Install dependencies
-      shell: bash
-      run: |
-        pip install -r ${{ inputs.requirements-file }}
-        if [ -f "${{ inputs.requirements-build-file }}" ]; then
-          pip install -r ${{ inputs.requirements-build-file }}
-        fi
-```
+**Inputs:** `python-version` (default `3.12`), `requirements-file`
+(default `requirements.txt`), `requirements-build-file` (default `''`,
+skipped when empty), `working-directory`, `use-cache`, `install-extras`
+
+**Key implementation details:**
+- Uses `actions/setup-python@v5` with pip caching
+- Dynamic `cache-dependency-path` handles empty `requirements-file`
+  or `requirements-build-file` without producing invalid paths
+- Each install step passes inputs through `env:` variables
+  (shell injection hardening)
+- `if:` guard skips requirements install when `requirements-file`
+  is set to `''`
 
 ---
 
@@ -445,36 +424,17 @@ runs:
 
 **Current Duplication:** neuro-san-ui and neuro-ui have identical setup patterns
 
-```yaml
-# actions/setup-node-env/action.yml
-name: 'Setup Node.js Environment'
-description: 'Setup Node.js with yarn via corepack and caching'
-inputs:
-  node-version:
-    description: 'Node.js version'
-    required: false
-    default: '22.17.1'
-runs:
-  using: 'composite'
-  steps:
-    - name: Set up yarn version
-      shell: bash
-      run: |
-        corepack enable
-        corepack install
-        yarn --version
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache: yarn
-    - name: Install dependencies
-      shell: bash
-      run: |
-        rm -rf node_modules
-        yarn cache clean --all
-        yarn install
-```
+**Inputs:** `node-version` (default `22`), `working-directory`,
+`use-cache`, `use-corepack`, `clean-install`, `registry-url`, `scope`
+
+**Key implementation details:**
+- Yarn-only (npm and pnpm support can be added later if needed)
+- `cache-dependency-path` hardcoded to `yarn.lock`
+- Uses `yarn install --immutable` to ensure the lockfile is not
+  modified during CI
+- `clean-install` is opt-in (default `false`); when enabled it
+  removes `node_modules` and clears the yarn cache before install
+- Corepack enable/install runs before `actions/setup-node@v4`
 
 ---
 
@@ -571,34 +531,21 @@ runs:
 
 **Current Duplication:** All repos that push to ECR have similar auth patterns
 
-```yaml
-# actions/aws-ecr-auth/action.yml
-name: 'AWS ECR Authentication'
-description: 'Configure AWS credentials via OIDC and login to ECR'
-inputs:
-  aws-role-arn:
-    description: 'AWS IAM role ARN for OIDC'
-    required: true
-  aws-region:
-    description: 'AWS region'
-    required: false
-    default: 'us-west-2'
-outputs:
-  registry:
-    description: 'ECR registry URL'
-    value: ${{ steps.login-ecr.outputs.registry }}
-runs:
-  using: 'composite'
-  steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ inputs.aws-role-arn }}
-        aws-region: ${{ inputs.aws-region }}
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-```
+**Inputs:** `aws-account-id` (required, 12-digit), `aws-role-name`
+(required), `aws-region` (default `us-west-2`), `role-session-name`,
+`role-duration-seconds`
+
+**Outputs:** `registry` (ECR registry URL)
+
+**Key implementation details:**
+- Accepts `aws-account-id` and `aws-role-name` separately to match
+  the existing `${{ vars.AWS_ACCOUNT_ID }}` / `${{ vars.AWS_ROLE_NAME }}`
+  pattern configured across repos
+- Constructs the ARN internally as
+  `arn:aws:iam::<account-id>:role/<role-name>`
+- Validates account ID is 12 digits and role name is non-empty
+- Uses `aws-actions/configure-aws-credentials@v4` and
+  `aws-actions/amazon-ecr-login@v2`
 
 ---
 
@@ -608,58 +555,18 @@ runs:
 
 **Current Duplication:** Multiple repos use docker/build-push-action with similar configs
 
-```yaml
-# actions/docker-buildx-push/action.yml
-name: 'Docker Buildx Push'
-description: 'Build and push Docker image with buildx and GHA caching'
-inputs:
-  context:
-    description: 'Build context'
-    required: false
-    default: '.'
-  dockerfile:
-    description: 'Path to Dockerfile'
-    required: false
-    default: 'Dockerfile'
-  tags:
-    description: 'Image tags (newline-separated)'
-    required: true
-  build-args:
-    description: 'Build arguments'
-    required: false
-    default: ''
-  platforms:
-    description: 'Target platforms'
-    required: false
-    default: 'linux/amd64'
-  push:
-    description: 'Push image to registry'
-    required: false
-    default: 'true'
-  use-cache:
-    description: 'Use GHA cache'
-    required: false
-    default: 'true'
-runs:
-  using: 'composite'
-  steps:
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: Build and push
-      uses: docker/build-push-action@v6
-      env:
-        BUILDKIT_PROGRESS: quiet
-      with:
-        context: ${{ inputs.context }}
-        file: ${{ inputs.dockerfile }}
-        push: ${{ inputs.push }}
-        tags: ${{ inputs.tags }}
-        build-args: ${{ inputs.build-args }}
-        platforms: ${{ inputs.platforms }}
-        cache-from: ${{ inputs.use-cache == 'true' && 'type=gha' || '' }}
-        cache-to: ${{ inputs.use-cache == 'true' && 'type=gha,mode=max' || '' }}
-        provenance: false
-```
+**Inputs:** `context`, `dockerfile`, `tags` (required), `build-args`,
+`platforms`, `push`, `use-cache`, `cache-scope`, `provenance`, `sbom`,
+`secrets`, `target`, `quiet`
+
+**Outputs:** `digest`, `imageid`, `metadata`
+
+**Key implementation details:**
+- Uses `docker/setup-buildx-action@v3` and `docker/build-push-action@v6`
+- Cache settings are computed in a separate step to support optional
+  `cache-scope` (useful for matrix builds)
+- `BUILDKIT_PROGRESS` is configurable via the `quiet` input
+- All cache-related values passed through `env:` variables
 
 ---
 
@@ -669,52 +576,21 @@ runs:
 
 **Current Duplication:** All repos have similar Slack notification patterns
 
-```yaml
-# actions/slack-notify/action.yml
-name: 'Slack Notify'
-description: 'Send Slack notification with fork detection'
-inputs:
-  status:
-    description: 'Job status (success, failure)'
-    required: true
-  message:
-    description: 'Custom message (optional)'
-    required: false
-    default: ''
-  webhook-url:
-    description: 'Slack webhook URL'
-    required: true
-  skip-on-fork:
-    description: 'Skip notification for fork PRs'
-    required: false
-    default: 'true'
-runs:
-  using: 'composite'
-  steps:
-    - name: Check if fork
-      id: fork-check
-      shell: bash
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "is_fork=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_fork=false" >> $GITHUB_OUTPUT
-          fi
-        else
-          echo "is_fork=false" >> $GITHUB_OUTPUT
-        fi
-    - name: Send Slack notification
-      if: ${{ inputs.skip-on-fork != 'true' || steps.fork-check.outputs.is_fork != 'true' }}
-      uses: slackapi/slack-github-action@v1.24.0
-      with:
-        payload: |
-          {
-            "text": "${{ inputs.status == 'success' && '✅' || '❌' }} *${{ inputs.message || (inputs.status == 'success' && 'Tests Passed' || 'Tests Failed') }}* for `${{ github.repository }}` on `${{ github.ref_name }}`"
-          }
-      env:
-        SLACK_WEBHOOK_URL: ${{ inputs.webhook-url }}
-```
+**Inputs:** `status` (required), `message`, `webhook-url` (optional,
+skips gracefully when empty), `skip-on-fork`, `mention-on-failure`
+
+**Key implementation details:**
+- `webhook-url` is optional with default `''`; when empty the
+  notification steps are skipped entirely, preventing CI failures
+  on fork PRs where secrets are unavailable
+- Payload is built with `jq --null-input` using `--arg` for each
+  field, ensuring proper JSON escaping
+- Includes a clickable link to the GitHub Actions build run in the
+  message body
+- All dynamic values passed through `env:` variables (shell injection
+  hardening)
+- Uses `slackapi/slack-github-action@v2.0.0` with `webhook-type:
+  incoming-webhook`
 
 ---
 
@@ -1062,7 +938,7 @@ runs:
 
 ## Conclusion
 
-The build-common repository should focus on providing reusable building blocks that eliminate the significant duplication currently present across the neuro* and ns* repositories. The highest-impact items are the composite actions for common steps (Slack notifications, AWS/ECR auth, Docker builds) and the reusable workflows for Python and Node.js quality gates.
+The build-common repository provides reusable building blocks that eliminate the significant duplication currently present across cognizant-ai-lab repositories. While the primary consumers today are the most active ns* repositories, the actions and workflows are designed to be reusable by any repository. The highest-impact items are the composite actions for common steps (Slack notifications, AWS/ECR auth, Docker builds) and the reusable workflows for Python and Node.js quality gates.
 
 By implementing this plan, teams will benefit from:
 - Reduced maintenance burden (fix once, apply everywhere)
