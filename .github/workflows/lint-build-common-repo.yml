@@ -19,9 +19,11 @@ jobs:
 
       - name: Install actionlint
         shell: bash
+        env:
+          ACTIONLINT_VERSION: ${{ vars.ACTIONLINT_VERSION || '1.7.11' }}
         run: |
           .github/workflows/scripts/install-actionlint.sh \
-            "${{ vars.ACTIONLINT_VERSION }}"
+            "$ACTIONLINT_VERSION"
 
       - name: Run actionlint on reusable workflows
         shell: bash
