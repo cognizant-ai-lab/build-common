@@ -51,12 +51,8 @@ runs:
       if: ${{ inputs.use-corepack == 'true' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: |
-        corepack enable
-        if [ -f "package.json" ]; then
-          corepack install
-          echo "Yarn version: $(yarn --version)"
-        fi
+      run: >-
+        "${{ github.action_path }}/scripts/enable-corepack.sh"
 
     - name: Setup Node.js ${{ inputs.node-version }}
       id: setup-node

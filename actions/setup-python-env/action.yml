@@ -74,44 +74,26 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         INPUT_PIP_VERSION: ${{ inputs.pip-version }}
-      run: |
-        if [ -n "$INPUT_PIP_VERSION" ]; then
-          echo "Installing pip==${INPUT_PIP_VERSION}"
-          python -m pip install "pip==${INPUT_PIP_VERSION}"
-        else
-          echo "Using bundled pip (no version specified)"
-        fi
-        echo "pip version: $(pip --version)"
+      run: >-
+        "${{ github.action_path }}/scripts/install-pip.sh"
 
     - name: Install dependencies from requirements file
       if: ${{ inputs.requirements-file != '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        INPUT_REQ_FILE: ${{ inputs.requirements-file }}
-      run: |
-        if [ -f "$INPUT_REQ_FILE" ]; then
-          echo "Installing from ${INPUT_REQ_FILE}"
-          pip install -r "$INPUT_REQ_FILE"
-        else
-          echo "::error::Required file ${INPUT_REQ_FILE} not found"
-          exit 1
-        fi
+        INPUT_REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+      run: >-
+        "${{ github.action_path }}/scripts/install-from-file.sh"
 
     - name: Install build dependencies
       if: ${{ inputs.requirements-build-file != '' }}
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        INPUT_BUILD_FILE: ${{ inputs.requirements-build-file }}
-      run: |
-        if [ -f "$INPUT_BUILD_FILE" ]; then
-          echo "Installing build deps from ${INPUT_BUILD_FILE}"
-          pip install -r "$INPUT_BUILD_FILE"
-        else
-          echo "::error::Required file ${INPUT_BUILD_FILE} not found"
-          exit 1
-        fi
+        INPUT_REQUIREMENTS_FILE: ${{ inputs.requirements-build-file }}
+      run: >-
+        "${{ github.action_path }}/scripts/install-from-file.sh"
 
     - name: Install extra packages
       if: ${{ inputs.install-extras != '' }}
