@@ -57,7 +57,8 @@ runs:
         echo "role-arn=${ARN}" >> "$GITHUB_OUTPUT"
 
     - name: Configure AWS credentials via OIDC
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a  # v4.3.1
+      # v4.3.1
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
       with:
         role-to-assume: ${{ steps.arn.outputs.role-arn }}
         aws-region: ${{ inputs.aws-region }}
@@ -66,4 +67,5 @@ runs:
 
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076  # v2.0.1
+      # v2.0.1
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076
