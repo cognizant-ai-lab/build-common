@@ -17,19 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install actionlint
-        shell: bash
-        run: |
-          URL="https://raw.githubusercontent.com"
-          URL="${URL}/rhysd/actionlint/main"
-          URL="${URL}/scripts/download-actionlint.bash"
-          bash <(curl --silent --show-error --location "$URL")
-          pwd >> "$GITHUB_PATH"
-
       - name: Run actionlint on reusable workflows
-        shell: bash
-        run: |
-          actionlint -color .github/workflows/*.yml
+        run: >-
+          docker run --rm
+          --volume "${{ github.workspace }}:/repo"
+          --workdir /repo
+          rhysd/actionlint:1.7.11
+          -color
+          .github/workflows/*.yml
 
 
   yamllint:
