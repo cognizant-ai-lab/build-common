@@ -55,4 +55,4 @@ Use `@main` for the latest version, or pin to a specific tag (e.g., `@v1.0.0`) f
 
 ## License
 
-Copyright 2025 Cognizant Technology Solutions Corp.
+Copyright 2025-2026 Cognizant Technology Solutions Corp.
