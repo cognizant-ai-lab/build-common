@@ -4,43 +4,54 @@ Reusable GitHub Actions building blocks for cognizant-ai-lab repositories.
 
 ## Overview
 
-This repository provides shared composite actions, reusable workflows, and scripts that can be used across repositories to reduce duplication and standardize CI/CD practices.
+This repository provides shared composite actions, reusable workflows, and scripts that can be used across any repository to reduce duplication and standardize CI/CD practices. The primary consumers today are the most active ns* repositories.
 
 ## Documentation
 
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md) - Detailed plan outlining the reusable building blocks to be implemented
 
-## Structure (Planned)
+## Composite Actions
 
-```
-build-common/
-├── .github/
-│   └── workflows/           # Reusable workflows (workflow_call)
-├── actions/                 # Composite actions
-├── scripts/                 # Shared shell/python scripts
-└── README.md
-```
+Available actions live in the `actions/` directory. Each action is a subdirectory
+containing an `action.yml` file. This one-to-one relationship between directory
+and `action.yml` is a GitHub requirement: the metadata filename must be
+`action.yml` (or `action.yaml`), so the enclosing directory name is what
+distinguishes one action from another.
 
-## Usage
+See [Metadata syntax for GitHub Actions](https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions)
+for details on this constraint.
 
-Once implemented, repos can reference actions and workflows from this repository:
+## Migration Guide
 
+To migrate from inline workflow steps to these actions:
+
+### Before (inline Slack notification):
 ```yaml
-# Using a composite action
-- uses: cognizant-ai-lab/build-common/actions/slack-notify@v1
+- name: Notify Slack on success
+  if: success()
+  uses: slackapi/slack-github-action@v1.24.0
+  with:
+    payload: |
+      {
+        "text": "Tests Passed for ${{ github.repository }}"
+      }
+  env:
+    SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+### After (using build-common):
+```yaml
+- name: Notify Slack
+  if: always()
+  uses: cognizant-ai-lab/build-common/actions/slack-notify@main
   with:
     status: ${{ job.status }}
     webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-# Using a reusable workflow
-jobs:
-  test:
-    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@v1
-    with:
-      python-version: '3.12'
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
+
+## Versioning
+
+Use `@main` for the latest version, or pin to a specific tag (e.g., `@v1.0.0`) for stability.
 
 ## License
 

@@ -1,0 +1,62 @@
+---
+name: 'AWS ECR Authentication'
+description: >-
+  Configure AWS credentials via OIDC
+  and login to Amazon ECR
+author: 'Cognizant AI Lab'
+
+inputs:
+  aws-account-id:
+    description: 'AWS account ID (12-digit)'
+    required: true
+  aws-role-name:
+    description: 'IAM role name for OIDC authentication'
+    required: true
+  aws-region:
+    description: 'AWS region for ECR'
+    required: false
+    default: 'us-west-2'
+  role-session-name:
+    description: >-
+      Session name for the assumed role (optional)
+    required: false
+    default: 'github-actions'
+  role-duration-seconds:
+    description: >-
+      Duration in seconds for the assumed role
+      session (optional)
+    required: false
+    default: '3600'
+
+outputs:
+  registry:
+    description: 'ECR registry URL'
+    value: ${{ steps.login-ecr.outputs.registry }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs and build ARN
+      id: arn
+      shell: bash
+      env:
+        INPUT_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+        INPUT_ROLE_NAME: ${{ inputs.aws-role-name }}
+      run: >-
+        "${{ github.action_path }}/scripts/validate-and-build-arn.sh"
+
+    - name: Configure AWS credentials via OIDC
+      # v4.3.1
+      # yamllint disable-line rule:line-length
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+      with:
+        role-to-assume: ${{ steps.arn.outputs.role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: ${{ inputs.role-session-name }}
+        role-duration-seconds: ${{ inputs.role-duration-seconds }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      # v2.0.1
+      # yamllint disable-line rule:line-length
+      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076

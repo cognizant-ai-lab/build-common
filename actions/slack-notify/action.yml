@@ -1,0 +1,87 @@
+---
+name: 'Slack Notify'
+description: >-
+  Send Slack notification with fork detection
+  to skip notifications on fork PRs
+author: 'Cognizant AI Lab'
+
+inputs:
+  status:
+    description: >-
+      Job status (success, failure, cancelled)
+    required: true
+  message:
+    description: >-
+      Custom message to include in notification
+      (optional)
+    required: false
+    default: ''
+  webhook-url:
+    description: >-
+      Slack webhook URL
+      (skips notification if empty/unavailable)
+    required: false
+    default: ''
+  skip-on-fork:
+    description: >-
+      Skip notification for fork PRs
+      (default: true)
+    required: false
+    default: 'true'
+  mention-on-failure:
+    description: >-
+      Mention @channel on failure (default: false)
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check if fork
+      id: fork-check
+      shell: bash
+      env:
+        GH_EVENT: ${{ github.event_name }}
+        GH_HEAD_REPO: >-
+          ${{ github.event.pull_request.head.repo.full_name }}
+        GH_SELF_REPO: ${{ github.repository }}
+      run: >-
+        "${{ github.action_path }}/scripts/check-fork.sh"
+
+    - name: Build notification payload
+      id: notification
+      if: >-
+        ${{
+          inputs.webhook-url != '' &&
+          (inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true')
+        }}
+      shell: bash
+      env:
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_MENTION: ${{ inputs.mention-on-failure }}
+        GH_REPO: ${{ github.repository }}
+        GH_REF: ${{ github.ref_name }}
+        GH_SERVER: ${{ github.server_url }}
+        GH_RUN_ID: ${{ github.run_id }}
+        GH_WORKFLOW: ${{ github.workflow }}
+        GH_ACTOR: ${{ github.actor }}
+      run: >-
+        "${{ github.action_path }}/scripts/build-payload.sh"
+
+    - name: Send Slack notification
+      if: >-
+        ${{
+          inputs.webhook-url != '' &&
+          (inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true')
+        }}
+      # v2.1.1
+      # yamllint disable-line rule:line-length
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+      with:
+        webhook: ${{ inputs.webhook-url }}
+        webhook-type: incoming-webhook
+        payload: >-
+          ${{ steps.notification.outputs.payload }}

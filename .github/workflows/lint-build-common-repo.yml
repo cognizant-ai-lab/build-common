@@ -1,0 +1,54 @@
+---
+name: Lint build-common repo
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  yamllint:
+    name: Lint YAML syntax
+    runs-on: ubuntu-latest
+    steps:
+      # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install yamllint
+        shell: bash
+        run: |
+          pip install yamllint
+
+      - name: Run yamllint
+        shell: bash
+        run: |
+          yamllint --strict .github/workflows/ actions/
+
+
+  actionlint:
+    name: Lint GitHub Actions
+    runs-on: ubuntu-latest
+    steps:
+      # v4.3.1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install actionlint
+        shell: bash
+        env:
+          ACTIONLINT_VERSION: ${{ vars.ACTIONLINT_VERSION }}
+        run: |
+          .github/workflows/scripts/install-actionlint.sh \
+            "$ACTIONLINT_VERSION"
+
+      # actionlint only understands workflow files, not composite
+      # action metadata (action.yml). The actions/ directory is
+      # covered by yamllint for YAML syntax validation instead.
+      - name: Run actionlint
+        shell: bash
+        run: |
+          actionlint -color \
+            .github/workflows/*.yml

@@ -1,0 +1,112 @@
+---
+name: 'Setup Python Environment'
+description: >-
+  Setup Python with dependencies and pip caching
+author: 'Cognizant AI Lab'
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  requirements-file:
+    description: 'Path to requirements.txt file'
+    required: false
+    default: 'requirements.txt'
+  requirements-build-file:
+    description: >-
+      Path to requirements-build.txt file
+      (optional, for dev dependencies)
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for installing dependencies'
+    required: false
+    default: '.'
+  use-cache:
+    description: 'Use pip cache'
+    required: false
+    default: 'true'
+  pip-version:
+    description: >-
+      Pin pip to a specific version (e.g. 25.0.1).
+      Leave empty to use the version bundled with the
+      Python installation.
+    required: false
+    default: ''
+  install-extras:
+    description: 'Extra packages to install (space separated)'
+    required: false
+    default: ''
+
+outputs:
+  python-version:
+    description: 'Installed Python version'
+    value: ${{ steps.setup-python.outputs.python-version }}
+  cache-hit:
+    description: 'Whether the cache was hit'
+    value: ${{ steps.setup-python.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      id: setup-python
+      # v5.6.0
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.use-cache == 'true' && 'pip' || '' }}
+        cache-dependency-path: |
+          ${{ inputs.requirements-file != '' &&
+            format('{0}/{1}',
+              inputs.working-directory,
+              inputs.requirements-file
+            ) || '' }}
+          ${{ inputs.requirements-build-file != '' &&
+            format('{0}/{1}',
+              inputs.working-directory,
+              inputs.requirements-build-file
+            ) || '' }}
+
+    - name: Install pip
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_PIP_VERSION: ${{ inputs.pip-version }}
+      run: >-
+        "${{ github.action_path }}/scripts/install-pip.sh"
+
+    - name: Install dependencies from requirements file
+      if: ${{ inputs.requirements-file != '' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+      run: >-
+        "${{ github.action_path }}/scripts/install-from-file.sh"
+
+    - name: Install build dependencies
+      if: ${{ inputs.requirements-build-file != '' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REQUIREMENTS_FILE: ${{ inputs.requirements-build-file }}
+      run: >-
+        "${{ github.action_path }}/scripts/install-from-file.sh"
+
+    - name: Install extra packages
+      if: ${{ inputs.install-extras != '' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_EXTRAS: ${{ inputs.install-extras }}
+      run: |
+        echo "Installing extra packages: ${INPUT_EXTRAS}"
+        pip install $INPUT_EXTRAS
+
+    - name: Show installed packages
+      shell: bash
+      run: |
+        echo "Installed Python packages:"
+        pip freeze

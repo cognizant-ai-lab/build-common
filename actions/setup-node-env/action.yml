@@ -1,0 +1,89 @@
+---
+name: 'Setup Node.js Environment'
+description: >-
+  Setup Node.js with yarn via corepack and dependency
+  caching. Only yarn is supported at this time; npm and
+  pnpm support can be added later if needed.
+author: 'Cognizant AI Lab'
+
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '22'
+  working-directory:
+    description: 'Working directory for installing dependencies'
+    required: false
+    default: '.'
+  use-cache:
+    description: 'Use package manager cache'
+    required: false
+    default: 'true'
+  use-corepack:
+    description: 'Enable corepack for yarn version management'
+    required: false
+    default: 'true'
+  clean-install:
+    description: 'Clean node_modules and cache before install'
+    required: false
+    default: 'false'
+  registry-url:
+    description: 'NPM registry URL (for publishing or private packages)'
+    required: false
+    default: ''
+  scope:
+    description: 'NPM scope for registry authentication'
+    required: false
+    default: ''
+
+outputs:
+  node-version:
+    description: 'Installed Node.js version'
+    value: ${{ steps.setup-node.outputs.node-version }}
+  cache-hit:
+    description: 'Whether the cache was hit'
+    value: ${{ steps.setup-node.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Enable corepack
+      if: ${{ inputs.use-corepack == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: >-
+        "${{ github.action_path }}/scripts/enable-corepack.sh"
+
+    - name: Setup Node.js ${{ inputs.node-version }}
+      id: setup-node
+      # v4.4.0
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
+        cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
+        registry-url: ${{ inputs.registry-url }}
+        scope: ${{ inputs.scope }}
+
+    - name: Clean install (if requested)
+      if: ${{ inputs.clean-install == 'true' }}
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Cleaning node_modules and cache..."
+        rm -rf node_modules
+        yarn cache clean --all 2>/dev/null || true
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Installing dependencies with yarn..."
+        yarn install --immutable
+
+    - name: Show installed packages
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Node.js version: $(node --version)"
+        echo "Yarn version: $(yarn --version)"
