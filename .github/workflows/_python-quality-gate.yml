@@ -202,6 +202,7 @@ jobs:
           EXTRA_PACKAGES: ${{ inputs.system-packages }}
         run: |
           apt-get update
+          # shellcheck disable=SC2086
           apt-get install --yes shellcheck make $EXTRA_PACKAGES
 
       - name: Install Python dependencies
@@ -249,6 +250,7 @@ jobs:
           SOURCES: ${{ inputs.sources }}
         run: |
           . /opt/venv/bin/activate
+          # shellcheck disable=SC2086
           ruff format --check --diff $SOURCES
 
       - name: 'Ruff: lint check'
@@ -262,6 +264,7 @@ jobs:
           SOURCES: ${{ inputs.sources }}
         run: |
           . /opt/venv/bin/activate
+          # shellcheck disable=SC2086
           ruff check --output-format=full $SOURCES
 
       # ── Legacy toolchain ──────────────────────────────
@@ -316,6 +319,7 @@ jobs:
           if [ -n "$PYLINT_CMD" ]; then
             eval "$PYLINT_CMD"
           else
+            # shellcheck disable=SC2086
             pylint $SOURCES
           fi
 
@@ -372,6 +376,7 @@ jobs:
           PYTEST_EXTRA: ${{ inputs.pytest-extra-args }}
         run: |
           . /opt/venv/bin/activate
+          # shellcheck disable=SC2086
           pytest --verbose -m "$PYTEST_MARKERS" $PYTEST_EXTRA
 
       # ── README / PyPI check ──────────────────────────
