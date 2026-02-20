@@ -1,0 +1,425 @@
+---
+name: Python Quality Gate
+
+"on":
+  workflow_call:
+    inputs:
+      lint-toolchain:
+        description: >-
+          Lint/format stack to use.
+          "ruff" runs ruff format --check and ruff check.
+          "legacy" runs flake8 (and optionally black --check
+          and isort --check-only).
+          Both run pylint when run-pylint is true.
+        required: false
+        default: 'ruff'
+        type: string
+
+      python-version:
+        description: 'Python version for the container image'
+        required: false
+        default: '3.12'
+        type: string
+      working-directory:
+        description: 'Working directory for all steps'
+        required: false
+        default: '.'
+        type: string
+      requirements-file:
+        description: 'Path to requirements.txt'
+        required: false
+        default: 'requirements.txt'
+        type: string
+      requirements-build-file:
+        description: 'Path to requirements-build.txt'
+        required: false
+        default: 'requirements-build.txt'
+        type: string
+      system-packages:
+        description: >-
+          Space-separated list of apt packages to install
+          (shellcheck and make are always included)
+        required: false
+        default: ''
+        type: string
+
+      sources:
+        description: >-
+          Space-separated source directories/files for
+          ruff and pylint (ignored when lint-command-override
+          is set)
+        required: false
+        default: '.'
+        type: string
+
+      run-black-check:
+        description: 'Run black --check (legacy toolchain only)'
+        required: false
+        default: false
+        type: boolean
+      run-isort-check:
+        description: 'Run isort --check-only (legacy toolchain only)'
+        required: false
+        default: false
+        type: boolean
+
+      run-pylint:
+        description: 'Run pylint'
+        required: false
+        default: true
+        type: boolean
+      pylint-command:
+        description: >-
+          Custom pylint command for repos with non-standard
+          invocation (e.g. "build_scripts/run_pylint.sh").
+          When empty, runs "pylint <sources>".
+        required: false
+        default: ''
+        type: string
+
+      run-shellcheck:
+        description: 'Run shellcheck on shell scripts'
+        required: false
+        default: true
+        type: boolean
+      shellcheck-command:
+        description: >-
+          Custom shellcheck command
+          (e.g. "build_scripts/run_shellcheck.sh").
+          When empty, uses the built-in find+shellcheck step.
+        required: false
+        default: ''
+        type: string
+
+      run-markdownlint:
+        description: 'Run pymarkdownlnt on markdown files'
+        required: false
+        default: false
+        type: boolean
+      markdownlint-command:
+        description: >-
+          Custom markdownlint command
+          (e.g. "build_scripts/run_markdownlint.sh").
+          When empty, runs
+          "pymarkdown --config .pymarkdownlint.yaml scan ./docs ./README.md".
+        required: false
+        default: ''
+        type: string
+
+      run-pytest:
+        description: 'Run pytest'
+        required: false
+        default: true
+        type: boolean
+      pytest-markers:
+        description: 'Pytest marker expression'
+        required: false
+        default: 'not integration and not smoke'
+        type: string
+      pytest-extra-args:
+        description: >-
+          Extra arguments passed to pytest
+          (e.g. "--cov=mypackage -n auto")
+        required: false
+        default: ''
+        type: string
+
+      check-readme-pypi:
+        description: 'Check README renders on PyPI'
+        required: false
+        default: false
+        type: boolean
+
+      enable-slack:
+        description: 'Send Slack notifications'
+        required: false
+        default: true
+        type: boolean
+
+      lint-command-override:
+        description: >-
+          Skip ALL individual lint/format steps and run
+          this single command instead
+          (e.g. "make lint-check").
+        required: false
+        default: ''
+        type: string
+
+      test-command-override:
+        description: >-
+          Skip the built-in pytest step and run this
+          command instead (e.g. "make test").
+        required: false
+        default: ''
+        type: string
+
+    secrets:
+      OPENAI_API_KEY:
+        required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    container:
+      image: python:${{ inputs.python-version }}-slim
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      # v4.3.1
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Check if PR is from a fork
+        id: fork-check
+        shell: bash
+        env:
+          GH_EVENT: ${{ github.event_name }}
+          GH_HEAD_REPO: >-
+            ${{ github.event.pull_request.head.repo.full_name }}
+          GH_SELF_REPO: ${{ github.repository }}
+        run: |
+          if [ "$GH_EVENT" = "pull_request" ]; then
+            if [ "$GH_HEAD_REPO" != "$GH_SELF_REPO" ]; then
+              echo "is_fork=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_fork=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "is_fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install system packages
+        shell: bash
+        env:
+          EXTRA_PACKAGES: ${{ inputs.system-packages }}
+        run: |
+          apt-get update
+          apt-get install --yes shellcheck make $EXTRA_PACKAGES
+
+      - name: Install Python dependencies
+        shell: bash
+        env:
+          REQUIREMENTS_FILE: ${{ inputs.requirements-file }}
+          REQUIREMENTS_BUILD_FILE: ${{ inputs.requirements-build-file }}
+        run: |
+          python -m venv /opt/venv
+          . /opt/venv/bin/activate
+          pip install --upgrade pip
+          if [ -n "$REQUIREMENTS_FILE" ] && [ -f "$REQUIREMENTS_FILE" ]; then
+            pip install --requirement "$REQUIREMENTS_FILE"
+          fi
+          if [ -n "$REQUIREMENTS_BUILD_FILE" ] \
+              && [ -f "$REQUIREMENTS_BUILD_FILE" ]; then
+            pip install --requirement "$REQUIREMENTS_BUILD_FILE"
+          fi
+
+      - name: Show installed packages
+        shell: bash
+        run: |
+          . /opt/venv/bin/activate
+          pip freeze
+
+      # ── Lint command override (escape hatch) ──────────
+      - name: Run lint command override
+        if: ${{ inputs.lint-command-override != '' }}
+        shell: bash
+        env:
+          LINT_CMD: ${{ inputs.lint-command-override }}
+        run: |
+          . /opt/venv/bin/activate
+          eval "$LINT_CMD"
+
+      # ── Ruff toolchain ────────────────────────────────
+      - name: 'Ruff: format check'
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.lint-toolchain == 'ruff'
+          }}
+        shell: bash
+        env:
+          SOURCES: ${{ inputs.sources }}
+        run: |
+          . /opt/venv/bin/activate
+          ruff format --check --diff $SOURCES
+
+      - name: 'Ruff: lint check'
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.lint-toolchain == 'ruff'
+          }}
+        shell: bash
+        env:
+          SOURCES: ${{ inputs.sources }}
+        run: |
+          . /opt/venv/bin/activate
+          ruff check --output-format=full $SOURCES
+
+      # ── Legacy toolchain ──────────────────────────────
+      - name: 'Legacy: flake8'
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.lint-toolchain == 'legacy'
+          }}
+        shell: bash
+        run: |
+          . /opt/venv/bin/activate
+          flake8
+
+      - name: 'Legacy: black --check'
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.lint-toolchain == 'legacy' &&
+            inputs.run-black-check
+          }}
+        shell: bash
+        run: |
+          . /opt/venv/bin/activate
+          black --check .
+
+      - name: 'Legacy: isort --check-only'
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.lint-toolchain == 'legacy' &&
+            inputs.run-isort-check
+          }}
+        shell: bash
+        run: |
+          . /opt/venv/bin/activate
+          isort --check-only .
+
+      # ── Shared: pylint ────────────────────────────────
+      - name: Run pylint
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-pylint
+          }}
+        shell: bash
+        env:
+          PYLINT_CMD: ${{ inputs.pylint-command }}
+          SOURCES: ${{ inputs.sources }}
+        run: |
+          . /opt/venv/bin/activate
+          if [ -n "$PYLINT_CMD" ]; then
+            eval "$PYLINT_CMD"
+          else
+            pylint $SOURCES
+          fi
+
+      # ── Shared: shellcheck ───────────────────────────
+      - name: Run shellcheck
+        if: ${{ inputs.run-shellcheck }}
+        shell: bash
+        env:
+          SHELLCHECK_CMD: ${{ inputs.shellcheck-command }}
+        run: |
+          if [ -n "$SHELLCHECK_CMD" ]; then
+            eval "$SHELLCHECK_CMD"
+          else
+            find . -type f -name '*.sh' -not -path '*/venv/*' \
+              -not -path '*/.venv/*' -print0 \
+              | xargs --no-run-if-empty -0 shellcheck
+          fi
+
+      # ── Shared: markdownlint ─────────────────────────
+      - name: Run markdownlint
+        if: ${{ inputs.run-markdownlint }}
+        shell: bash
+        env:
+          MARKDOWNLINT_CMD: ${{ inputs.markdownlint-command }}
+        run: |
+          . /opt/venv/bin/activate
+          if [ -n "$MARKDOWNLINT_CMD" ]; then
+            eval "$MARKDOWNLINT_CMD"
+          else
+            pymarkdown --config ./.pymarkdownlint.yaml \
+              scan ./docs ./README.md
+          fi
+
+      # ── Test ──────────────────────────────────────────
+      - name: Run test command override
+        if: >-
+          ${{ inputs.test-command-override != '' }}
+        shell: bash
+        env:
+          TEST_CMD: ${{ inputs.test-command-override }}
+        run: |
+          . /opt/venv/bin/activate
+          eval "$TEST_CMD"
+
+      - name: Run pytest
+        if: >-
+          ${{
+            inputs.test-command-override == '' &&
+            inputs.run-pytest
+          }}
+        shell: bash
+        env:
+          PYTEST_MARKERS: ${{ inputs.pytest-markers }}
+          PYTEST_EXTRA: ${{ inputs.pytest-extra-args }}
+        run: |
+          . /opt/venv/bin/activate
+          pytest --verbose -m "$PYTEST_MARKERS" $PYTEST_EXTRA
+
+      # ── README / PyPI check ──────────────────────────
+      - name: Check README renders on PyPI
+        if: ${{ inputs.check-readme-pypi }}
+        shell: bash
+        run: |
+          . /opt/venv/bin/activate
+          pip install readme_renderer "readme_renderer[md]"
+          python -m readme_renderer README.md
+
+      # ── Slack notifications ──────────────────────────
+      - name: Notify Slack on success
+        if: >-
+          ${{
+            success() &&
+            inputs.enable-slack &&
+            steps.fork-check.outputs.is_fork == 'false'
+          }}
+        # v2.1.1
+        # yamllint disable-line rule:line-length
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+        with:
+          payload: >-
+            {
+              "text": "Tests Passed for
+              `${{ github.repository }}`
+              on `${{ github.ref_name }}`"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: >-
+          ${{
+            failure() &&
+            inputs.enable-slack &&
+            steps.fork-check.outputs.is_fork == 'false'
+          }}
+        # v2.1.1
+        # yamllint disable-line rule:line-length
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+        with:
+          payload: >-
+            {
+              "text": "Tests Failed for
+              `${{ github.repository }}`
+              on `${{ github.ref_name }}`"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
