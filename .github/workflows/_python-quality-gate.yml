@@ -106,6 +106,22 @@ name: Python Quality Gate
         default: ''
         type: string
 
+      run-lychee:
+        description: 'Run lychee dead-link checker on markdown files'
+        required: false
+        default: false
+        type: boolean
+      lychee-args:
+        description: >-
+          Arguments passed to lychee
+          (e.g. "--exclude-path venv './**/*.md'").
+          When empty, defaults to
+          "--no-progress --exclude-path venv './**/*.md'".
+        required: false
+        default: >-
+          --no-progress --exclude-path venv './**/*.md'
+        type: string
+
       run-pytest:
         description: 'Run pytest'
         required: false
@@ -352,6 +368,17 @@ jobs:
             pymarkdown --config ./.pymarkdownlint.yaml \
               scan ./docs ./README.md
           fi
+
+      # ── Shared: lychee dead-link checker ─────────────
+      - name: Run lychee link checker
+        if: ${{ inputs.run-lychee }}
+        # v2.8.0
+        # yamllint disable-line rule:line-length
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411
+        with:
+          args: ${{ inputs.lychee-args }}
+          workdir: ${{ inputs.working-directory }}
+          fail: true
 
       # ── Test ──────────────────────────────────────────
       - name: Run test command override
