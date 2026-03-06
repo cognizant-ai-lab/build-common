@@ -46,7 +46,7 @@ runs:
           ${{ github.event.pull_request.head.repo.full_name }}
         GH_SELF_REPO: ${{ github.repository }}
       run: >-
-        "${{ github.action_path }}/scripts/check-fork.sh"
+        "${{ github.action_path }}/../../scripts/check-fork.sh"
 
     - name: Build notification payload
       id: notification

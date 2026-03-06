@@ -1,0 +1,126 @@
+---
+name: 'Checkmarx One Scan'
+description: >-
+  Run a Checkmarx One security scan (SAST, SCA, IaC Security,
+  API Security) with PR decoration and optional SARIF upload
+author: 'Cognizant AI Lab'
+
+inputs:
+  base-uri:
+    description: 'Checkmarx One portal URL'
+    required: true
+  cx-tenant:
+    description: 'Checkmarx One tenant name'
+    required: true
+  cx-client-id:
+    description: 'OAuth client ID for Checkmarx One authentication'
+    required: true
+  cx-client-secret:
+    description: 'OAuth client secret for Checkmarx One authentication'
+    required: true
+  project-name:
+    description: >-
+      Checkmarx project name
+      (defaults to the GitHub repository name)
+    required: false
+    default: ${{ github.repository }}
+  branch:
+    description: >-
+      Branch name to associate with the scan
+      (defaults to the current branch)
+    required: false
+    default: ${{ github.head_ref || github.ref }}
+  github-token:
+    description: >-
+      GitHub token for PR decoration and SARIF upload
+      (defaults to the built-in token)
+    required: false
+    default: ${{ github.token }}
+  scan-params:
+    description: >-
+      Additional CLI parameters for the scan command
+      (e.g. --scan-types sast,sca --preset-name Default)
+    required: false
+    default: ''
+  global-params:
+    description: >-
+      Global CLI parameters applied to all cx commands
+    required: false
+    default: ''
+  utils-params:
+    description: >-
+      Additional CLI parameters for the cx utils pr command
+    required: false
+    default: ''
+  results-params:
+    description: >-
+      Additional CLI parameters for the cx results show command
+    required: false
+    default: ''
+  source-dir:
+    description: 'Source directory to scan'
+    required: false
+    default: '.'
+  skip-on-fork:
+    description: >-
+      Skip the scan for fork PRs (default: true)
+    required: false
+    default: 'true'
+
+outputs:
+  scan-id:
+    description: 'Checkmarx One scan ID'
+    value: ${{ steps.scan.outputs.cxScanID }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check if fork
+      id: fork-check
+      shell: bash
+      env:
+        GH_EVENT: ${{ github.event_name }}
+        GH_HEAD_REPO: >-
+          ${{ github.event.pull_request.head.repo.full_name }}
+        GH_SELF_REPO: ${{ github.repository }}
+      run: >-
+        "${{ github.action_path }}/../../scripts/check-fork.sh"
+
+    - name: Validate inputs
+      if: >-
+        ${{
+          inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true'
+        }}
+      shell: bash
+      env:
+        INPUT_BASE_URI: ${{ inputs.base-uri }}
+        INPUT_TENANT: ${{ inputs.cx-tenant }}
+        INPUT_CLIENT_ID: ${{ inputs.cx-client-id }}
+        INPUT_CLIENT_SECRET: ${{ inputs.cx-client-secret }}
+      run: >-
+        "${{ github.action_path }}/scripts/validate-inputs.sh"
+
+    - name: Run Checkmarx One scan
+      id: scan
+      if: >-
+        ${{
+          inputs.skip-on-fork != 'true' ||
+          steps.fork-check.outputs.is_fork != 'true'
+        }}
+      # 2.3.30
+      # yamllint disable-line rule:line-length
+      uses: Checkmarx/ast-github-action@c6aa9ddb245caaf752e0750bdd134cdc7d33644d
+      with:
+        base_uri: ${{ inputs.base-uri }}
+        cx_tenant: ${{ inputs.cx-tenant }}
+        cx_client_id: ${{ inputs.cx-client-id }}
+        cx_client_secret: ${{ inputs.cx-client-secret }}
+        project_name: ${{ inputs.project-name }}
+        branch: ${{ inputs.branch }}
+        github_token: ${{ inputs.github-token }}
+        scan_params: ${{ inputs.scan-params }}
+        global_params: ${{ inputs.global-params }}
+        utils_params: ${{ inputs.utils-params }}
+        results_params: ${{ inputs.results-params }}
+        source_dir: ${{ inputs.source-dir }}
