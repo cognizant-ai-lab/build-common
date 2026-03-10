@@ -38,6 +38,7 @@ build-common/
 ├── actions/
 │   ├── setup-python-env/                 # Composite action
 │   ├── setup-node-env/                   # Composite action
+│   ├── run-python-lint/                  # Composite action
 │   ├── run-shellcheck/                   # Composite action
 │   ├── run-hadolint/                     # Composite action
 │   ├── docker-build-check/               # Composite action
@@ -65,7 +66,12 @@ build-common/
 
 **File:** `.github/workflows/_python-quality-gate.yml`
 
-**Purpose:** Standardized Python testing pipeline used by neuro-san, neuro-san-studio, neuro-san-web-client, neuro-san-benchmarking, idea-brainstorm-demo
+**Status:** Implemented
+
+**Purpose:** Standardized Python testing pipeline with selectable lint
+toolchain. Supports both the modern ruff stack (used by neuro-san-studio)
+and the legacy flake8/black/isort stack (used by neuro-san, nsflow,
+idea-brainstorm-demo).
 
 **Current Duplication Found In:**
 - neuro-san/workflows/tests.yml
@@ -74,89 +80,85 @@ build-common/
 - neuro-san-benchmarking/workflows/tests.yml
 - idea-brainstorm-demo/workflows/tests.yml
 
-**Inputs:**
-```yaml
-inputs:
-  python-version:
-    description: 'Python version to use'
-    required: false
-    default: '3.12'
-    type: string
-  working-directory:
-    description: 'Working directory for the job'
-    required: false
-    default: '.'
-    type: string
-  requirements-file:
-    description: 'Path to requirements.txt'
-    required: false
-    default: 'requirements.txt'
-    type: string
-  requirements-build-file:
-    description: 'Path to requirements-build.txt'
-    required: false
-    default: 'requirements-build.txt'
-    type: string
-  pytest-markers:
-    description: 'Pytest marker expression (e.g., "not integration and not smoke")'
-    required: false
-    default: 'not integration and not smoke'
-    type: string
-  run-pylint:
-    description: 'Run pylint check'
-    required: false
-    default: true
-    type: boolean
-  run-flake8:
-    description: 'Run flake8 check'
-    required: false
-    default: true
-    type: boolean
-  run-shellcheck:
-    description: 'Run shellcheck on scripts'
-    required: false
-    default: true
-    type: boolean
-  run-markdownlint:
-    description: 'Run markdown linting'
-    required: false
-    default: true
-    type: boolean
-  check-readme-pypi:
-    description: 'Check README renders on PyPI'
-    required: false
-    default: true
-    type: boolean
-  enable-slack:
-    description: 'Enable Slack notifications'
-    required: false
-    default: true
-    type: boolean
-  coverage-config:
-    description: 'Path to coverage config file'
-    required: false
-    default: '.coveragerc'
-    type: string
-secrets:
-  OPENAI_API_KEY:
-    required: false
-  SLACK_WEBHOOK_URL:
-    required: false
-```
+**Key design decisions:**
 
-**Steps to Include:**
+- `lint-toolchain` selector (`"ruff"` or `"legacy"`) replaces individual
+  `run-flake8` / `run-black` / `run-isort` booleans. Prevents invalid
+  combinations and gives repos a coherent preset.
+- `lint-command-override` escape hatch lets repos with complex Makefile
+  orchestration (e.g. `make lint-check`) bypass individual tool steps.
+- `pylint-command` override supports repos like neuro-san that use
+  custom pylint scripts with plugins and directory exclusions.
+- Default toolchain is `ruff` so new repos get the modern stack.
+  Existing repos explicitly opt into `legacy` during transition.
+
+**Inputs (summary):**
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `lint-toolchain` | `ruff` | `"ruff"` or `"legacy"` |
+| `python-version` | `3.12` | Python version for container |
+| `sources` | `.` | Directories for ruff/pylint |
+| `run-pylint` | `true` | Run pylint |
+| `pylint-command` | *(empty)* | Custom pylint invocation |
+| `run-black-check` | `false` | black --check (legacy only) |
+| `run-isort-check` | `false` | isort --check-only (legacy only) |
+| `run-shellcheck` | `true` | Run shellcheck |
+| `run-markdownlint` | `false` | Run pymarkdownlnt |
+| `run-pytest` | `true` | Run pytest |
+| `pytest-markers` | `not integration and not smoke` | Marker filter |
+| `check-readme-pypi` | `false` | PyPI README render check |
+| `enable-slack` | `true` | Slack notifications |
+| `lint-command-override` | *(empty)* | Skip lint steps, run this |
+| `test-command-override` | *(empty)* | Skip pytest, run this |
+
+See the workflow file for the full input definitions.
+
+**Steps:**
 1. Checkout repository
-2. Setup Python container (python:X.XX-slim)
-3. Install system dependencies (shellcheck, make)
-4. Install Python dependencies (requirements.txt, requirements-build.txt)
+2. Fork detection (skip Slack on forks)
+3. Install system packages (shellcheck, make, extras)
+4. Install Python dependencies (venv, requirements, build-requirements)
 5. Show installed packages (pip freeze)
-6. Run pylint (optional)
-7. Run flake8 (optional)
-8. Run shellcheck (optional)
-9. Run pymarkdownlint (optional)
-10. Run pytest with coverage
+6. Lint command override OR individual lint steps:
+   - **ruff path:** ruff format --check, ruff check
+   - **legacy path:** flake8, optional black --check, optional isort
+7. Run pylint (optional, supports custom command)
+8. Run shellcheck (optional, supports custom command)
+9. Run pymarkdownlnt (optional, supports custom command)
+10. Test command override OR pytest with markers
 11. Check README renders on PyPI (optional)
 12. Slack notification on success/failure (with fork detection)
+
+**Example usage (ruff, e.g. neuro-san-studio):**
+```yaml
+jobs:
+  test:
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@<sha>
+    with:
+      lint-toolchain: 'ruff'
+      python-version: '3.13'
+      sources: 'run.py apps coded_tools tests'
+      run-markdownlint: true
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+**Example usage (legacy, e.g. neuro-san):**
+```yaml
+jobs:
+  test:
+    uses: cognizant-ai-lab/build-common/.github/workflows/_python-quality-gate.yml@<sha>
+    with:
+      lint-toolchain: 'legacy'
+      pylint-command: 'build_scripts/run_pylint.sh'
+      shellcheck-command: 'build_scripts/run_shellcheck.sh'
+      markdownlint-command: 'build_scripts/run_markdownlint.sh'
+      run-markdownlint: true
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
 
 ---
 
@@ -438,7 +440,30 @@ skipped when empty), `working-directory`, `use-cache`, `install-extras`
 
 ---
 
-### 2.3 run-shellcheck
+### 2.3 run-python-lint
+
+**Status:** Implemented
+
+**Purpose:** Run formatting and linting checks with a selectable toolchain
+(ruff or legacy flake8/black/isort), plus optional pylint. This is a
+lighter composite action for repos that want lint checks without the full
+quality gate workflow.
+
+**Inputs:** `toolchain` (default `ruff`), `sources` (required),
+`run-pylint` (default `true`), `pylint-command` (default `''`),
+`run-black-check` (default `false`), `run-isort-check` (default `false`)
+
+**Key implementation details:**
+- Inline scripts extracted to `scripts/` directory following repo
+  conventions
+- `toolchain` input selects between ruff and legacy code paths
+- Legacy-specific toggles (`run-black-check`, `run-isort-check`) are
+  ignored when toolchain is `ruff`
+- `pylint-command` override supports custom invocations
+
+---
+
+### 2.4 run-shellcheck
 
 **Purpose:** Run ShellCheck on shell scripts
 
@@ -464,7 +489,7 @@ runs:
 
 ---
 
-### 2.4 run-hadolint
+### 2.5 run-hadolint
 
 **Purpose:** Lint Dockerfiles with hadolint
 
@@ -495,7 +520,7 @@ runs:
 
 ---
 
-### 2.5 docker-build-check
+### 2.6 docker-build-check
 
 **Purpose:** Verify Dockerfile builds without pushing
 
@@ -525,7 +550,7 @@ runs:
 
 ---
 
-### 2.6 aws-ecr-auth
+### 2.7 aws-ecr-auth
 
 **Purpose:** Configure AWS credentials and login to ECR
 
@@ -549,7 +574,7 @@ runs:
 
 ---
 
-### 2.7 docker-buildx-push
+### 2.8 docker-buildx-push
 
 **Purpose:** Build and push Docker image with buildx and caching
 
@@ -570,7 +595,7 @@ runs:
 
 ---
 
-### 2.8 slack-notify
+### 2.9 slack-notify
 
 **Purpose:** Send Slack notifications with fork detection
 
@@ -594,7 +619,7 @@ skips gracefully when empty), `skip-on-fork`, `mention-on-failure`
 
 ---
 
-### 2.9 compute-version
+### 2.10 compute-version
 
 **Purpose:** Compute version/image tag from git state
 
@@ -657,7 +682,7 @@ runs:
 
 ---
 
-### 2.10 rollup-qa-results
+### 2.11 rollup-qa-results
 
 **Purpose:** Roll up QA step outcomes and set final job status
 
@@ -698,7 +723,7 @@ runs:
 
 ---
 
-### 2.11 gitops-update-yaml
+### 2.12 gitops-update-yaml
 
 **Purpose:** Update YAML files for GitOps deployments
 
@@ -906,10 +931,10 @@ runs:
 | Pattern | neuro-san | neuro-san-studio | neuro-san-web-client | neuro-san-benchmarking | idea-brainstorm-demo |
 |---------|-----------|------------------|----------------------|------------------------|----------------------|
 | Python container | 3.12-slim | 3.13-slim | 3.12-slim | 3.12-slim | 3.12-slim |
+| lint toolchain | legacy (flake8) | **ruff** | — | legacy (flake8) | legacy (flake8) |
 | pylint | Yes | Yes (make) | No | Yes | Yes |
-| flake8 | Yes | No | No | Yes | Yes |
 | shellcheck | Yes | Yes | No | Yes | Yes |
-| markdownlint | Yes | No | No | Yes | Yes |
+| markdownlint | Yes | Yes (make) | No | Yes | Yes |
 | pytest | Yes | Yes | No | Yes | Yes |
 | README check | Yes | Yes | Yes | Yes | Yes |
 | Slack notify | Yes | Yes | Yes | Yes | No (commented) |
