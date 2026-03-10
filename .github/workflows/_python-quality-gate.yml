@@ -400,14 +400,14 @@ jobs:
         # yamllint disable-line rule:line-length
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: >-
             {
               "text": "Tests Passed for
               `${{ github.repository }}`
               on `${{ github.ref_name }}`"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Notify Slack on failure
         if: >-
@@ -420,11 +420,11 @@ jobs:
         # yamllint disable-line rule:line-length
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: >-
             {
               "text": "Tests Failed for
               `${{ github.repository }}`
               on `${{ github.ref_name }}`"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
