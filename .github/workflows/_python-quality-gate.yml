@@ -325,7 +325,11 @@ jobs:
 
       # ── Shared: shellcheck ───────────────────────────
       - name: Run shellcheck
-        if: ${{ inputs.run-shellcheck }}
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-shellcheck
+          }}
         shell: bash
         env:
           SHELLCHECK_CMD: ${{ inputs.shellcheck-command }}
@@ -340,7 +344,11 @@ jobs:
 
       # ── Shared: markdownlint ─────────────────────────
       - name: Run markdownlint
-        if: ${{ inputs.run-markdownlint }}
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-markdownlint
+          }}
         shell: bash
         env:
           MARKDOWNLINT_CMD: ${{ inputs.markdownlint-command }}
