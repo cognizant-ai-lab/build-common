@@ -360,6 +360,7 @@ jobs:
         shell: bash
         env:
           TEST_CMD: ${{ inputs.test-command-override }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           . /opt/venv/bin/activate
           eval "$TEST_CMD"
@@ -374,6 +375,7 @@ jobs:
         env:
           PYTEST_MARKERS: ${{ inputs.pytest-markers }}
           PYTEST_EXTRA: ${{ inputs.pytest-extra-args }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           . /opt/venv/bin/activate
           # shellcheck disable=SC2086
