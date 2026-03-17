@@ -46,9 +46,9 @@ runs:
         "${{ github.action_path }}/scripts/validate-and-build-arn.sh"
 
     - name: Configure AWS credentials via OIDC
-      # v4.3.1
+      # v6.0.0
       # yamllint disable-line rule:line-length
-      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7
       with:
         role-to-assume: ${{ steps.arn.outputs.role-arn }}
         aws-region: ${{ inputs.aws-region }}
@@ -57,6 +57,6 @@ runs:
 
     - name: Login to Amazon ECR
       id: login-ecr
-      # v2.0.1
+      # v2.0.2
       # yamllint disable-line rule:line-length
-      uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076
+      uses: aws-actions/amazon-ecr-login@006813a119ae0fdeb70ae00f16cda21ee6f2ff3d

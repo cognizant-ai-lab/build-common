@@ -108,9 +108,9 @@ runs:
           inputs.skip-on-fork != 'true' ||
           steps.fork-check.outputs.is_fork != 'true'
         }}
-      # 2.3.30
+      # 2.3.32
       # yamllint disable-line rule:line-length
-      uses: Checkmarx/ast-github-action@c6aa9ddb245caaf752e0750bdd134cdc7d33644d
+      uses: Checkmarx/ast-github-action@327efb5d1dd16ac6c7c21a9ff8ec1e8ec393b5e6
       with:
         base_uri: ${{ inputs.base-uri }}
         cx_tenant: ${{ inputs.cx-tenant }}
