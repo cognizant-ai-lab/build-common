@@ -92,7 +92,7 @@ name: Python Quality Gate
         type: string
 
       run-markdownlint:
-        description: 'Run pymarkdownlnt on markdown files'
+        description: 'Run pymarkdownlint on markdown files'
         required: false
         default: false
         type: boolean

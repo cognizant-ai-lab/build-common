@@ -104,7 +104,7 @@ idea-brainstorm-demo).
 | `run-black-check` | `false` | black --check (legacy only) |
 | `run-isort-check` | `false` | isort --check-only (legacy only) |
 | `run-shellcheck` | `true` | Run shellcheck |
-| `run-markdownlint` | `false` | Run pymarkdownlnt |
+| `run-markdownlint` | `false` | Run pymarkdownlint |
 | `run-pytest` | `true` | Run pytest |
 | `pytest-markers` | `not integration and not smoke` | Marker filter |
 | `check-readme-pypi` | `false` | PyPI README render check |
@@ -125,7 +125,7 @@ See the workflow file for the full input definitions.
    - **legacy path:** flake8, optional black --check, optional isort
 7. Run pylint (optional, supports custom command)
 8. Run shellcheck (optional, supports custom command)
-9. Run pymarkdownlnt (optional, supports custom command)
+9. Run pymarkdownlint (optional, supports custom command)
 10. Test command override OR pytest with markers
 11. Check README renders on PyPI (optional)
 12. Slack notification on success/failure (with fork detection)
