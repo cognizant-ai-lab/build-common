@@ -177,6 +177,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+      # Checkout build-common so reusable-workflow steps can
+      # call shared scripts (github.action_path is not
+      # available in reusable workflows, only in composite
+      # actions).
+      # v4.3.1
+      - name: Checkout build-common scripts
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: cognizant-ai-lab/build-common
+          path: .build-common
+          sparse-checkout: scripts/
+          sparse-checkout-cone-mode: false
+
+      # Canonical logic lives in scripts/check-fork.sh
       - name: Check if PR is from a fork
         id: fork-check
         shell: bash
@@ -185,16 +199,8 @@ jobs:
           GH_HEAD_REPO: >-
             ${{ github.event.pull_request.head.repo.full_name }}
           GH_SELF_REPO: ${{ github.repository }}
-        run: |
-          if [ "$GH_EVENT" = "pull_request" ]; then
-            if [ "$GH_HEAD_REPO" != "$GH_SELF_REPO" ]; then
-              echo "is_fork=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "is_fork=false" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "is_fork=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: >-
+          bash "$GITHUB_WORKSPACE/.build-common/scripts/check-fork.sh"
 
       - name: Install system packages
         shell: bash
