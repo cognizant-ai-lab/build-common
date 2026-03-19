@@ -141,6 +141,9 @@ jobs:
       sources: 'run.py apps coded_tools tests'
       run-markdownlint: true
     secrets:
+      # Pass OPENAI_API_KEY when the repo has tests that
+      # depend on OpenAI (e.g. neuro-san, neuro-san-studio).
+      # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 

@@ -1,4 +1,6 @@
 ---
+# Composed by _python-quality-gate.yml (the reusable
+# workflow) -- see .github/workflows/ for the caller.
 name: 'Run Python Lint'
 description: >-
   Run formatting and linting checks with a selectable

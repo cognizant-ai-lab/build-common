@@ -1,4 +1,6 @@
 ---
+# Composed by _python-quality-gate.yml (the reusable
+# workflow) -- see .github/workflows/ for the caller.
 name: 'Slack Notify'
 description: >-
   Send Slack notification with fork detection

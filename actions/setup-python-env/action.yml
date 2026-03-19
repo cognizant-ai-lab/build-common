@@ -1,4 +1,6 @@
 ---
+# Composed by _python-quality-gate.yml (the reusable
+# workflow) -- see .github/workflows/ for the caller.
 name: 'Setup Python Environment'
 description: >-
   Setup Python with dependencies and pip caching
