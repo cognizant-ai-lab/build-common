@@ -246,84 +246,22 @@ jobs:
         run: |
           eval "$LINT_CMD"
 
-      # ── Ruff toolchain ────────────────────────────────
-      - name: 'Ruff: format check'
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.lint-toolchain == 'ruff'
-          }}
-        shell: bash
-        env:
-          SOURCES: ${{ inputs.sources }}
-        run: |
-          # shellcheck disable=SC2086
-          ruff format --check --diff $SOURCES
-
-      - name: 'Ruff: lint check'
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.lint-toolchain == 'ruff'
-          }}
-        shell: bash
-        env:
-          SOURCES: ${{ inputs.sources }}
-        run: |
-          # shellcheck disable=SC2086
-          ruff check --output-format=full $SOURCES
-
-      # ── Legacy toolchain ──────────────────────────────
-      - name: 'Legacy: flake8'
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.lint-toolchain == 'legacy'
-          }}
-        shell: bash
-        run: |
-          flake8
-
-      - name: 'Legacy: black --check'
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.lint-toolchain == 'legacy' &&
-            inputs.run-black-check
-          }}
-        shell: bash
-        run: |
-          black --check .
-
-      - name: 'Legacy: isort --check-only'
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.lint-toolchain == 'legacy' &&
-            inputs.run-isort-check
-          }}
-        shell: bash
-        run: |
-          isort --check-only .
-
-      # ── Shared: pylint ────────────────────────────────
-      - name: Run pylint
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.run-pylint
-          }}
-        shell: bash
-        env:
-          PYLINT_CMD: ${{ inputs.pylint-command }}
-          SOURCES: ${{ inputs.sources }}
-        run: |
-          if [ -n "$PYLINT_CMD" ]; then
-            eval "$PYLINT_CMD"
-          else
-            # shellcheck disable=SC2086
-            pylint $SOURCES
-          fi
+      # ── Lint: ruff / legacy / pylint ─────────────────
+      # Compose the shared run-python-lint action instead
+      # of reimplementing ruff, flake8, black, isort, and
+      # pylint steps inline.  The action delegates to
+      # dedicated shell scripts and supports both the
+      # "ruff" and "legacy" toolchains.
+      - name: Run Python lint
+        if: ${{ inputs.lint-command-override == '' }}
+        uses: ./.build-common/actions/run-python-lint
+        with:
+          toolchain: ${{ inputs.lint-toolchain }}
+          sources: ${{ inputs.sources }}
+          run-pylint: ${{ inputs.run-pylint }}
+          pylint-command: ${{ inputs.pylint-command }}
+          run-black-check: ${{ inputs.run-black-check }}
+          run-isort-check: ${{ inputs.run-isort-check }}
 
       # ── Shared: shellcheck ───────────────────────────
       - name: Run shellcheck
