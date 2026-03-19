@@ -356,29 +356,17 @@ jobs:
           pip install readme_renderer "readme_renderer[md]"
           python -m readme_renderer README.md
 
-      # ── Slack notifications ──────────────────────────
-      # Compose the shared slack-notify action which
-      # provides fork detection, rich payloads (emoji,
-      # color, run links, actor info), and optional
-      # @channel mentions -- instead of bare inline JSON.
-      - name: Notify Slack on success
+      # ── Slack notification ───────────────────────────
+      # Single step for both success and failure.
+      # job.status provides the outcome automatically;
+      # !cancelled() ensures we skip only on cancellation.
+      - name: Notify Slack
         if: >-
           ${{
-            success() &&
+            !cancelled() &&
             inputs.enable-slack
           }}
         uses: ./.build-common/actions/slack-notify
         with:
-          status: 'success'
-          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Slack on failure
-        if: >-
-          ${{
-            failure() &&
-            inputs.enable-slack
-          }}
-        uses: ./.build-common/actions/slack-notify
-        with:
-          status: 'failure'
+          status: ${{ job.status }}
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
