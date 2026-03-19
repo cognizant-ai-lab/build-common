@@ -237,6 +237,28 @@ jobs:
             ${{ steps.detect-reqs.outputs.requirements-build-file }}
           working-directory: ${{ inputs.working-directory }}
 
+      # ── Validate lint-toolchain ──────────────────────
+      # Fail fast when the caller passes an unrecognised
+      # toolchain value.  Without this gate an invalid
+      # value like "typo" silently skips every lint step
+      # and the build passes green.  The check is skipped
+      # when lint-command-override is set because the
+      # override bypasses toolchain selection entirely.
+      - name: Validate lint-toolchain input
+        if: ${{ inputs.lint-command-override == '' }}
+        shell: bash
+        env:
+          TOOLCHAIN: ${{ inputs.lint-toolchain }}
+        run: |
+          case "$TOOLCHAIN" in
+            ruff|legacy) ;;
+            *)
+              echo "::error::Invalid lint-toolchain value" \
+                "'$TOOLCHAIN'. Must be 'ruff' or 'legacy'."
+              exit 1
+              ;;
+          esac
+
       # ── Lint command override (escape hatch) ──────────
       - name: Run lint command override
         if: ${{ inputs.lint-command-override != '' }}
