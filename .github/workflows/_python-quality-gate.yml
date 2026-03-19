@@ -266,7 +266,7 @@ jobs:
         env:
           LINT_CMD: ${{ inputs.lint-command-override }}
         run: |
-          eval "$LINT_CMD"
+          bash -c "$LINT_CMD"
 
       # ── Lint: ruff / legacy / pylint ─────────────────
       # Compose the shared run-python-lint action instead
@@ -297,7 +297,7 @@ jobs:
           SHELLCHECK_CMD: ${{ inputs.shellcheck-command }}
         run: |
           if [ -n "$SHELLCHECK_CMD" ]; then
-            eval "$SHELLCHECK_CMD"
+            bash -c "$SHELLCHECK_CMD"
           else
             find . -type f -name '*.sh' -not -path '*/venv/*' \
               -not -path '*/.venv/*' -print0 \
@@ -316,7 +316,7 @@ jobs:
           MARKDOWNLINT_CMD: ${{ inputs.markdownlint-command }}
         run: |
           if [ -n "$MARKDOWNLINT_CMD" ]; then
-            eval "$MARKDOWNLINT_CMD"
+            bash -c "$MARKDOWNLINT_CMD"
           else
             pymarkdown --config ./.pymarkdownlint.yaml \
               scan ./docs ./README.md
@@ -331,7 +331,7 @@ jobs:
           TEST_CMD: ${{ inputs.test-command-override }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          eval "$TEST_CMD"
+          bash -c "$TEST_CMD"
 
       - name: Run pytest
         if: >-
