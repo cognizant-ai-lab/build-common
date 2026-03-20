@@ -153,6 +153,15 @@ name: Python Quality Gate
         default: ''
         type: string
 
+      build-common-ref:
+        description: >-
+          Git ref (branch, tag, or SHA) of build-common to
+          check out for shared actions and scripts.  Defaults
+          to "main"; override when testing a build-common PR.
+        required: false
+        default: 'main'
+        type: string
+
     secrets:
       OPENAI_API_KEY:
         required: false
@@ -185,10 +194,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: cognizant-ai-lab/build-common
-          # Use the same commit as the reusable workflow so
-          # composite actions and scripts stay in lock-step
-          # with the workflow file.
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ inputs.build-common-ref }}
           path: .build-common
           sparse-checkout: |
             scripts
