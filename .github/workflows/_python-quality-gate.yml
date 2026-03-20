@@ -185,6 +185,10 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: cognizant-ai-lab/build-common
+          # Use the same commit as the reusable workflow so
+          # composite actions and scripts stay in lock-step
+          # with the workflow file.
+          ref: ${{ github.workflow_sha }}
           path: .build-common
           sparse-checkout: |
             scripts
