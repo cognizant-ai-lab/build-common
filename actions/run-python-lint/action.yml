@@ -37,12 +37,21 @@ inputs:
     description: 'Run isort --check-only (legacy only)'
     required: false
     default: 'false'
+  working-directory:
+    description: >-
+      Working directory for all lint steps.  Composite
+      actions do not inherit the caller's
+      defaults.run.working-directory, so the workflow
+      must pass it explicitly.
+    required: false
+    default: '.'
 
 runs:
   using: 'composite'
   steps:
     - name: 'Ruff: format check'
       if: ${{ inputs.toolchain == 'ruff' }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         INPUT_SOURCES: ${{ inputs.sources }}
@@ -51,6 +60,7 @@ runs:
 
     - name: 'Ruff: lint check'
       if: ${{ inputs.toolchain == 'ruff' }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         INPUT_SOURCES: ${{ inputs.sources }}
@@ -59,6 +69,7 @@ runs:
 
     - name: 'Legacy: flake8'
       if: ${{ inputs.toolchain == 'legacy' }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: flake8
 
@@ -68,6 +79,7 @@ runs:
           inputs.toolchain == 'legacy' &&
           inputs.run-black-check == 'true'
         }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: black --check .
 
@@ -77,11 +89,13 @@ runs:
           inputs.toolchain == 'legacy' &&
           inputs.run-isort-check == 'true'
         }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       run: isort --check-only .
 
     - name: Run pylint
       if: ${{ inputs.run-pylint == 'true' }}
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         INPUT_PYLINT_CMD: ${{ inputs.pylint-command }}

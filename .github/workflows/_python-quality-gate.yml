@@ -294,6 +294,7 @@ jobs:
           pylint-command: ${{ inputs.pylint-command }}
           run-black-check: ${{ inputs.run-black-check }}
           run-isort-check: ${{ inputs.run-isort-check }}
+          working-directory: ${{ inputs.working-directory }}
 
       # ── Shared: shellcheck ───────────────────────────
       - name: Run shellcheck
