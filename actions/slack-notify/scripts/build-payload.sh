@@ -86,6 +86,8 @@ PAYLOAD=$(jq --null-input \
     ]
   }')
 
-echo "payload<<PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
-echo "$PAYLOAD" >> "$GITHUB_OUTPUT"
-echo "PAYLOAD_EOF" >> "$GITHUB_OUTPUT"
+{
+  echo "payload<<PAYLOAD_EOF"
+  echo "$PAYLOAD"
+  echo "PAYLOAD_EOF"
+} >> "$GITHUB_OUTPUT"

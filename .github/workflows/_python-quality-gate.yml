@@ -310,7 +310,8 @@ jobs:
             bash -c "$SHELLCHECK_CMD"
           else
             find . -type f -name '*.sh' -not -path '*/venv/*' \
-              -not -path '*/.venv/*' -print0 \
+              -not -path '*/.venv/*' \
+              -not -path '*/.build-common/*' -print0 \
               | xargs --no-run-if-empty -0 shellcheck
           fi
 
