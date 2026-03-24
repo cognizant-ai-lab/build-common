@@ -1,0 +1,384 @@
+---
+name: Python Quality Gate
+
+"on":
+  workflow_call:
+    inputs:
+      lint-toolchain:
+        description: >-
+          Lint/format stack to use.
+          "ruff" runs ruff format --check and ruff check.
+          "legacy" runs flake8 (and optionally black --check
+          and isort --check-only).
+          Both run pylint when run-pylint is true.
+        required: false
+        default: 'ruff'
+        type: string
+
+      python-version:
+        description: 'Python version to use'
+        required: false
+        default: '3.12'
+        type: string
+      working-directory:
+        description: 'Working directory for all steps'
+        required: false
+        default: '.'
+        type: string
+      requirements-file:
+        description: 'Path to requirements.txt'
+        required: false
+        default: 'requirements.txt'
+        type: string
+      requirements-build-file:
+        description: 'Path to requirements-build.txt'
+        required: false
+        default: 'requirements-build.txt'
+        type: string
+      system-packages:
+        description: >-
+          Space-separated list of apt packages to install
+          (shellcheck and make are always included)
+        required: false
+        default: ''
+        type: string
+
+      sources:
+        description: >-
+          Space-separated source directories/files for
+          ruff and pylint (ignored when lint-command-override
+          is set)
+        required: false
+        default: '.'
+        type: string
+
+      run-black-check:
+        description: 'Run black --check (legacy toolchain only)'
+        required: false
+        default: false
+        type: boolean
+      run-isort-check:
+        description: 'Run isort --check-only (legacy toolchain only)'
+        required: false
+        default: false
+        type: boolean
+
+      run-pylint:
+        description: 'Run pylint'
+        required: false
+        default: true
+        type: boolean
+      pylint-command:
+        description: >-
+          Custom pylint command for repos with non-standard
+          invocation (e.g. "build_scripts/run_pylint.sh").
+          When empty, runs "pylint <sources>".
+        required: false
+        default: ''
+        type: string
+
+      run-shellcheck:
+        description: 'Run shellcheck on shell scripts'
+        required: false
+        default: true
+        type: boolean
+      shellcheck-command:
+        description: >-
+          Custom shellcheck command
+          (e.g. "build_scripts/run_shellcheck.sh").
+          When empty, uses the built-in find+shellcheck step.
+        required: false
+        default: ''
+        type: string
+
+      run-markdownlint:
+        description: 'Run pymarkdownlint on markdown files'
+        required: false
+        default: false
+        type: boolean
+      markdownlint-command:
+        description: >-
+          Custom markdownlint command
+          (e.g. "build_scripts/run_markdownlint.sh").
+          When empty, runs
+          "pymarkdown --config .pymarkdownlint.yaml scan ./docs ./README.md".
+        required: false
+        default: ''
+        type: string
+
+      run-pytest:
+        description: 'Run pytest'
+        required: false
+        default: true
+        type: boolean
+      pytest-markers:
+        description: 'Pytest marker expression'
+        required: false
+        default: 'not integration and not smoke'
+        type: string
+      pytest-extra-args:
+        description: >-
+          Extra arguments passed to pytest
+          (e.g. "--cov=mypackage -n auto")
+        required: false
+        default: ''
+        type: string
+
+      check-readme-pypi:
+        description: 'Check README renders on PyPI'
+        required: false
+        default: false
+        type: boolean
+
+      enable-slack:
+        description: 'Send Slack notifications'
+        required: false
+        default: true
+        type: boolean
+
+      lint-command-override:
+        description: >-
+          Skip ALL individual lint/format steps and run
+          this single command instead
+          (e.g. "make lint-check").
+        required: false
+        default: ''
+        type: string
+
+      test-command-override:
+        description: >-
+          Skip the built-in pytest step and run this
+          command instead (e.g. "make test").
+        required: false
+        default: ''
+        type: string
+
+      build-common-ref:
+        description: >-
+          Git ref (branch, tag, or SHA) of build-common to
+          check out for shared actions and scripts.  Defaults
+          to "main"; override when testing a build-common PR.
+        required: false
+        default: 'main'
+        type: string
+
+    secrets:
+      OPENAI_API_KEY:
+        required: false
+      SLACK_WEBHOOK_URL:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      # v4.3.1
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      # Checkout build-common so reusable-workflow steps can
+      # call shared composite actions and scripts
+      # (github.action_path is not available in reusable
+      # workflows, only in composite actions -- see
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context).
+      # v4.3.1
+      - name: Checkout build-common
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: cognizant-ai-lab/build-common
+          ref: ${{ inputs.build-common-ref }}
+          path: .build-common
+          sparse-checkout: |
+            scripts
+            actions
+
+      - name: Install system packages
+        shell: bash
+        env:
+          EXTRA_PACKAGES: ${{ inputs.system-packages }}
+        run: |
+          sudo apt-get update
+          # shellcheck disable=SC2086
+          sudo apt-get install --yes shellcheck make $EXTRA_PACKAGES
+
+      # Detect which requirements files actually exist so
+      # setup-python-env skips missing ones gracefully
+      # (the inline defaults may reference files a consumer
+      # repo does not ship).
+      - name: Detect requirements files
+        id: detect-reqs
+        shell: bash
+        env:
+          REQ_FILE: ${{ inputs.requirements-file }}
+          REQ_BUILD_FILE: ${{ inputs.requirements-build-file }}
+        run: |
+          if [ -n "$REQ_FILE" ] && [ -f "$REQ_FILE" ]; then
+            echo "requirements-file=$REQ_FILE" >> "$GITHUB_OUTPUT"
+          else
+            echo "requirements-file=" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$REQ_BUILD_FILE" ] \
+              && [ -f "$REQ_BUILD_FILE" ]; then
+            echo "requirements-build-file=$REQ_BUILD_FILE" \
+              >> "$GITHUB_OUTPUT"
+          else
+            echo "requirements-build-file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Compose the shared setup-python-env action instead
+      # of manually creating a venv.  The action handles
+      # Python installation, pip caching, and dependency
+      # installation via actions/setup-python.
+      - name: Setup Python environment
+        uses: ./.build-common/actions/setup-python-env
+        with:
+          python-version: ${{ inputs.python-version }}
+          requirements-file: >-
+            ${{ steps.detect-reqs.outputs.requirements-file }}
+          requirements-build-file: >-
+            ${{ steps.detect-reqs.outputs.requirements-build-file }}
+          working-directory: ${{ inputs.working-directory }}
+
+      # ── Validate lint-toolchain ──────────────────────
+      # Fail fast when the caller passes an unrecognised
+      # toolchain value.  Without this gate an invalid
+      # value like "typo" silently skips every lint step
+      # and the build passes green.  The check is skipped
+      # when lint-command-override is set because the
+      # override bypasses toolchain selection entirely.
+      - name: Validate lint-toolchain input
+        if: ${{ inputs.lint-command-override == '' }}
+        shell: bash
+        env:
+          TOOLCHAIN: ${{ inputs.lint-toolchain }}
+        run: |
+          case "$TOOLCHAIN" in
+            ruff|legacy) ;;
+            *)
+              echo "::error::Invalid lint-toolchain value" \
+                "'$TOOLCHAIN'. Must be 'ruff' or 'legacy'."
+              exit 1
+              ;;
+          esac
+
+      # ── Lint command override (escape hatch) ──────────
+      - name: Run lint command override
+        if: ${{ inputs.lint-command-override != '' }}
+        shell: bash
+        env:
+          LINT_CMD: ${{ inputs.lint-command-override }}
+        run: |
+          bash -c "$LINT_CMD"
+
+      # ── Lint: ruff / legacy / pylint ─────────────────
+      # Compose the shared run-python-lint action instead
+      # of reimplementing ruff, flake8, black, isort, and
+      # pylint steps inline.  The action delegates to
+      # dedicated shell scripts and supports both the
+      # "ruff" and "legacy" toolchains.
+      - name: Run Python lint
+        if: ${{ inputs.lint-command-override == '' }}
+        uses: ./.build-common/actions/run-python-lint
+        with:
+          toolchain: ${{ inputs.lint-toolchain }}
+          sources: ${{ inputs.sources }}
+          run-pylint: ${{ inputs.run-pylint }}
+          pylint-command: ${{ inputs.pylint-command }}
+          run-black-check: ${{ inputs.run-black-check }}
+          run-isort-check: ${{ inputs.run-isort-check }}
+          working-directory: ${{ inputs.working-directory }}
+
+      # ── Shared: shellcheck ───────────────────────────
+      - name: Run shellcheck
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-shellcheck
+          }}
+        shell: bash
+        env:
+          SHELLCHECK_CMD: ${{ inputs.shellcheck-command }}
+        run: |
+          if [ -n "$SHELLCHECK_CMD" ]; then
+            bash -c "$SHELLCHECK_CMD"
+          else
+            find . -type f -name '*.sh' -not -path '*/venv/*' \
+              -not -path '*/.venv/*' \
+              -not -path '*/.build-common/*' -print0 \
+              | xargs --no-run-if-empty -0 shellcheck
+          fi
+
+      # ── Shared: markdownlint ─────────────────────────
+      - name: Run markdownlint
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-markdownlint
+          }}
+        shell: bash
+        env:
+          MARKDOWNLINT_CMD: ${{ inputs.markdownlint-command }}
+        run: |
+          if [ -n "$MARKDOWNLINT_CMD" ]; then
+            bash -c "$MARKDOWNLINT_CMD"
+          else
+            pymarkdown --config ./.pymarkdownlint.yaml \
+              scan ./docs ./README.md
+          fi
+
+      # ── Test ──────────────────────────────────────────
+      - name: Run test command override
+        if: >-
+          ${{ inputs.test-command-override != '' }}
+        shell: bash
+        env:
+          TEST_CMD: ${{ inputs.test-command-override }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          bash -c "$TEST_CMD"
+
+      - name: Run pytest
+        if: >-
+          ${{
+            inputs.test-command-override == '' &&
+            inputs.run-pytest
+          }}
+        shell: bash
+        env:
+          PYTEST_MARKERS: ${{ inputs.pytest-markers }}
+          PYTEST_EXTRA: ${{ inputs.pytest-extra-args }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # shellcheck disable=SC2086
+          pytest --verbose -m "$PYTEST_MARKERS" $PYTEST_EXTRA
+
+      # ── README / PyPI check ──────────────────────────
+      - name: Check README renders on PyPI
+        if: ${{ inputs.check-readme-pypi }}
+        shell: bash
+        run: |
+          pip install readme_renderer "readme_renderer[md]"
+          python -m readme_renderer README.md
+
+      # ── Slack notification ───────────────────────────
+      # Single step for both success and failure.
+      # job.status provides the outcome automatically;
+      # !cancelled() ensures we skip only on cancellation.
+      - name: Notify Slack
+        if: >-
+          ${{
+            !cancelled() &&
+            inputs.enable-slack
+          }}
+        uses: ./.build-common/actions/slack-notify
+        with:
+          status: ${{ job.status }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
