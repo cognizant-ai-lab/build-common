@@ -183,7 +183,7 @@ inputs:
   node-version:
     description: 'Node.js version to use'
     required: false
-    default: '22.17.1'
+    default: '24'
     type: string
   working-directory:
     description: 'Working directory for the job'
@@ -429,7 +429,7 @@ skipped when empty), `working-directory`, `use-cache`, `install-extras`
 
 **Current Duplication:** neuro-san-ui and neuro-ui have identical setup patterns
 
-**Inputs:** `node-version` (default `22`), `working-directory`,
+**Inputs:** `node-version` (default `24`), `working-directory`,
 `use-cache`, `use-corepack`, `clean-install`, `registry-url`, `scope`
 
 **Key implementation details:**
@@ -948,7 +948,7 @@ runs:
 
 | Pattern | neuro-san-ui | neuro-ui | ns-usageboard |
 |---------|--------------|----------|---------------|
-| Node version | 22.17.1 | 22.17.1 | N/A |
+| Node version | 24 | 24 | N/A |
 | Yarn corepack | Yes | Yes | N/A |
 | ESLint | Yes | Yes | N/A |
 | Prettier | Yes | Yes | N/A |
