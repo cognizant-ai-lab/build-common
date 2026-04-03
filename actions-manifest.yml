@@ -12,8 +12,10 @@
 #   used_in  - Files that reference this action
 #
 # Maintainers: update this file whenever an action version
-# is changed.  Run a periodic review to ensure all SHAs
-# still point to the latest patch of their major version.
+# is changed, then run scripts/sync-actions-manifest.py to
+# patch the workflow files.  Run a periodic review to ensure
+# all SHAs still point to the latest patch of their major
+# version.
 
 actions:
   - action: actions/checkout
