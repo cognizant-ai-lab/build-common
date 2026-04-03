@@ -69,4 +69,4 @@ jobs:
       - name: Validate actions manifest
         shell: bash
         run: |
-          scripts/check-actions-manifest.sh
+          scripts/check-actions-manifest.py
