@@ -20,6 +20,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "actions-manifest.yml"
 VERSION_COMMENT_RE = re.compile(r"^(\s*)#\s*v?\d+\.\d+")
+YAMLLINT_DISABLE_RE = re.compile(r"^\s*#\s*yamllint\s+disable-line\s+")
 
 
 def load_manifest():
@@ -79,10 +80,18 @@ def sync(manifest, check_only):
                 if match:
                     line = uses_re.sub(rf"\g<1>{sha}", line)
 
-                    # Update the version comment on the previous line.
+                    # Update the version comment above the uses: line.
+                    # One-line pattern: version comment directly above.
+                    # Two-line pattern: version comment, then a
+                    # yamllint disable-line comment, then uses:.
                     if i > 0 and VERSION_COMMENT_RE.match(new_lines[i - 1]):
                         indent = re.match(r"(\s*)", new_lines[i - 1]).group(1)
                         new_lines[i - 1] = f"{indent}# {version}\n"
+                    elif (i > 1
+                          and YAMLLINT_DISABLE_RE.match(new_lines[i - 1])
+                          and VERSION_COMMENT_RE.match(new_lines[i - 2])):
+                        indent = re.match(r"(\s*)", new_lines[i - 2]).group(1)
+                        new_lines[i - 2] = f"{indent}# {version}\n"
 
                 new_lines.append(line)
 
