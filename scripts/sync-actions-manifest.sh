@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sync-actions-manifest.sh
 #
-# Reads ACTIONS_MANIFEST.yaml and patches every workflow /
+# Reads actions-manifest.yml and patches every workflow /
 # composite-action file so that pinned SHAs and version
 # comments match the manifest.
 #
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MANIFEST="${REPO_ROOT}/ACTIONS_MANIFEST.yaml"
+MANIFEST="${REPO_ROOT}/actions-manifest.yml"
 CHECK_ONLY=false
 
 if [ "${1:-}" = "--check" ]; then

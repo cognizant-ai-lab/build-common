@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-actions-manifest.sh
 #
-# Validates that ACTIONS_MANIFEST.yaml is complete and
+# Validates that actions-manifest.yml is complete and
 # consistent with the workflow and composite-action files.
 #
 # Checks performed:
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MANIFEST="${REPO_ROOT}/ACTIONS_MANIFEST.yaml"
+MANIFEST="${REPO_ROOT}/actions-manifest.yml"
 ERRORS=0
 
 if [ ! -f "$MANIFEST" ]; then
@@ -121,7 +121,7 @@ echo ""
 if [ "$ERRORS" -gt 0 ]; then
   echo "FAILED: ${ERRORS} issue(s) found."
   echo "Run 'scripts/sync-actions-manifest.sh' to fix SHA drift,"
-  echo "or add missing actions to ACTIONS_MANIFEST.yaml."
+  echo "or add missing actions to actions-manifest.yml."
   exit 1
 else
   echo "PASSED: Manifest is complete and consistent."
