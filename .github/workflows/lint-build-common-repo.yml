@@ -52,3 +52,21 @@ jobs:
         run: |
           actionlint -color \
             .github/workflows/*.yml
+
+
+  manifest-check:
+    name: Check actions manifest
+    runs-on: ubuntu-latest
+    steps:
+      # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install PyYAML
+        shell: bash
+        run: |
+          pip install pyyaml
+
+      - name: Validate actions manifest
+        shell: bash
+        run: |
+          scripts/check-actions-manifest.sh
