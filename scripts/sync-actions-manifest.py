@@ -11,123 +11,154 @@ Usage:
 """
 
 import argparse
+import logging
 import re
 import sys
 from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = REPO_ROOT / "actions-manifest.yml"
-VERSION_COMMENT_RE = re.compile(r"^(\s*)#\s*v?\d+\.\d+")
-YAMLLINT_DISABLE_RE = re.compile(r"^\s*#\s*yamllint\s+disable-line\s+")
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
-def load_manifest():
-    with open(MANIFEST) as fh:
-        return yaml.safe_load(fh)
+class ManifestSyncer:
+    """Patches workflow files to match actions-manifest.yml."""
 
+    REPO_ROOT = Path(__file__).resolve().parent.parent
+    MANIFEST = REPO_ROOT / "actions-manifest.yml"
+    VERSION_COMMENT_RE = re.compile(r"^(\s*)#\s*v?\d+\.\d+")
+    YAMLLINT_DISABLE_RE = re.compile(
+        r"^\s*#\s*yamllint\s+disable-line\s+"
+    )
 
-def sync(manifest, check_only):
-    """Patch workflow files to match the manifest.
+    def __init__(self, check_only=False):
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._check_only = check_only
+        self._drift = False
 
-    Returns True if any drift was detected.
-    """
-    drift = False
+    def _load_manifest(self):
+        """Read and parse actions-manifest.yml."""
+        with open(self.MANIFEST) as fh:
+            return yaml.safe_load(fh)
 
-    for entry in manifest["actions"]:
-        action = entry["action"]
-        sha = entry["sha"]
-        version = entry["version"]
-
-        for rel_path in entry["used_in"]:
-            target = REPO_ROOT / rel_path
-            if not target.is_file():
-                print(f"WARN: {rel_path} listed in manifest but not found",
-                      file=sys.stderr)
-                continue
-
-            lines = target.read_text().splitlines(keepends=True)
-            uses_re = re.compile(
-                rf"(uses:\s+{re.escape(action)}@)([0-9a-f]+)"
+    def _sync_entry(self, action, sha, version, rel_path):
+        """Sync a single action reference in one workflow file."""
+        target = self.REPO_ROOT / rel_path
+        if not target.is_file():
+            self._logger.warning(
+                "WARN: %s listed in manifest but not found", rel_path
             )
+            return
 
-            # Collect unique SHAs currently present for this action.
-            current_shas = set()
-            for line in lines:
-                match = uses_re.search(line)
-                if match:
-                    current_shas.add(match.group(2))
+        lines = target.read_text().splitlines(keepends=True)
+        uses_re = re.compile(
+            rf"(uses:\s+{re.escape(action)}@)([0-9a-f]+)"
+        )
 
-            if not current_shas:
-                print(f"WARN: {action} not found in {rel_path}",
-                      file=sys.stderr)
-                continue
+        # Collect unique SHAs currently present for this action.
+        current_shas = set()
+        for line in lines:
+            match = uses_re.search(line)
+            if match:
+                current_shas.add(match.group(2))
 
-            if current_shas == {sha}:
-                continue
+        if not current_shas:
+            self._logger.warning(
+                "WARN: %s not found in %s", action, rel_path
+            )
+            return
 
-            print(f"DRIFT: {rel_path}: {action} -> @{sha} ({version})")
-            drift = True
+        if current_shas == {sha}:
+            return
 
-            if check_only:
-                continue
+        self._logger.info(
+            "DRIFT: %s: %s -> @%s (%s)", rel_path, action, sha, version
+        )
+        self._drift = True
 
-            # Replace SHAs and update version comments.
-            new_lines = []
-            for i, line in enumerate(lines):
-                match = uses_re.search(line)
-                if match:
-                    line = uses_re.sub(rf"\g<1>{sha}", line)
+        if self._check_only:
+            return
 
-                    # Update the version comment above the uses: line.
-                    # One-line pattern: version comment directly above.
-                    # Two-line pattern: version comment, then a
-                    # yamllint disable-line comment, then uses:.
-                    if i > 0 and VERSION_COMMENT_RE.match(new_lines[i - 1]):
-                        indent = re.match(r"(\s*)", new_lines[i - 1]).group(1)
-                        new_lines[i - 1] = f"{indent}# {version}\n"
-                    elif (i > 1
-                          and YAMLLINT_DISABLE_RE.match(new_lines[i - 1])
-                          and VERSION_COMMENT_RE.match(new_lines[i - 2])):
-                        indent = re.match(r"(\s*)", new_lines[i - 2]).group(1)
-                        new_lines[i - 2] = f"{indent}# {version}\n"
+        new_lines = self._patch_lines(lines, uses_re, sha, version)
+        target.write_text("".join(new_lines))
+        self._logger.info("  FIXED: %s", rel_path)
 
-                new_lines.append(line)
+    def _patch_lines(self, lines, uses_re, sha, version):
+        """Replace SHAs and update version comments."""
+        new_lines = []
+        for i, line in enumerate(lines):
+            match = uses_re.search(line)
+            if match:
+                line = uses_re.sub(rf"\g<1>{sha}", line)
 
-            target.write_text("".join(new_lines))
-            print(f"  FIXED: {rel_path}")
+                # Update the version comment above the uses: line.
+                # One-line pattern: version comment directly above.
+                # Two-line pattern: version comment, then a
+                # yamllint disable-line comment, then uses:.
+                if (i > 0
+                        and self.VERSION_COMMENT_RE.match(
+                            new_lines[i - 1])):
+                    indent = re.match(
+                        r"(\s*)", new_lines[i - 1]
+                    ).group(1)
+                    new_lines[i - 1] = "%s# %s\n" % (indent, version)
+                elif (i > 1
+                      and self.YAMLLINT_DISABLE_RE.match(
+                          new_lines[i - 1])
+                      and self.VERSION_COMMENT_RE.match(
+                          new_lines[i - 2])):
+                    indent = re.match(
+                        r"(\s*)", new_lines[i - 2]
+                    ).group(1)
+                    new_lines[i - 2] = "%s# %s\n" % (indent, version)
 
-    return drift
+            new_lines.append(line)
+        return new_lines
 
+    def run(self):
+        """Sync all manifest entries and report results."""
+        if not self.MANIFEST.is_file():
+            self._logger.error(
+                "ERROR: Manifest not found at %s", self.MANIFEST
+            )
+            sys.exit(1)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Sync workflow files from actions-manifest.yml"
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="Exit 1 on drift without making changes",
-    )
-    args = parser.parse_args()
+        manifest = self._load_manifest()
 
-    if not MANIFEST.is_file():
-        print(f"ERROR: Manifest not found at {MANIFEST}", file=sys.stderr)
-        sys.exit(1)
+        for entry in manifest.get("actions", []):
+            action = entry.get("action", "")
+            sha = entry.get("sha", "")
+            version = entry.get("version", "")
 
-    manifest = load_manifest()
-    drift = sync(manifest, check_only=args.check)
+            for rel_path in entry.get("used_in", []):
+                self._sync_entry(action, sha, version, rel_path)
 
-    if drift and args.check:
-        print("")
-        print("Manifest drift detected. Run 'scripts/sync-actions-manifest.py'"
-              " to fix.")
-        sys.exit(1)
+        if self._drift and self._check_only:
+            self._logger.info("")
+            self._logger.info(
+                "Manifest drift detected.  "
+                "Run 'scripts/sync-actions-manifest.py' to fix."
+            )
+            sys.exit(1)
 
-    if not drift:
-        print("All action SHAs match the manifest.")
+        if not self._drift:
+            self._logger.info("All action SHAs match the manifest.")
+
+    @staticmethod
+    def main():
+        """Entry point."""
+        parser = argparse.ArgumentParser(
+            description="Sync workflow files from actions-manifest.yml"
+        )
+        parser.add_argument(
+            "--check",
+            action="store_true",
+            help="Exit 1 on drift without making changes",
+        )
+        args = parser.parse_args()
+
+        ManifestSyncer(check_only=args.check).run()
 
 
 if __name__ == "__main__":
-    main()
+    ManifestSyncer.main()

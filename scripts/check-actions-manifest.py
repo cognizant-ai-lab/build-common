@@ -13,132 +13,161 @@ Usage:
   scripts/check-actions-manifest.py          # from repo root
 """
 
-import os
+import logging
 import re
 import sys
 from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = REPO_ROOT / "actions-manifest.yml"
-USES_RE = re.compile(r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@([0-9a-f]+)")
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
-def load_manifest():
-    with open(MANIFEST) as fh:
-        return yaml.safe_load(fh)
+class ManifestChecker:
+    """Validates actions-manifest.yml against repo files."""
 
+    REPO_ROOT = Path(__file__).resolve().parent.parent
+    MANIFEST = REPO_ROOT / "actions-manifest.yml"
+    USES_RE = re.compile(
+        r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@([0-9a-f]+)"
+    )
 
-def check_shas(manifest):
-    """Check 1: every manifest SHA matches the actual files."""
-    errors = 0
-    print("=== Check 1: Manifest SHAs match workflow files ===")
+    # Directories to scan for untracked action references.
+    SCAN_DIRS = [".github/workflows", "actions"]
 
-    for entry in manifest["actions"]:
-        action = entry["action"]
-        sha = entry["sha"]
-        version = entry["version"]
+    def __init__(self):
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._errors = 0
 
-        for rel_path in entry["used_in"]:
-            target = REPO_ROOT / rel_path
-            if not target.is_file():
-                print(f"  FAIL: {rel_path} listed in manifest but file not found")
-                errors += 1
+    def _load_manifest(self):
+        """Read and parse actions-manifest.yml."""
+        with open(self.MANIFEST) as fh:
+            return yaml.safe_load(fh)
+
+    def _check_shas(self, manifest):
+        """Check 1: every manifest SHA matches the actual files."""
+        self._logger.info(
+            "=== Check 1: Manifest SHAs match workflow files ==="
+        )
+
+        for entry in manifest.get("actions", []):
+            action = entry.get("action", "")
+            sha = entry.get("sha", "")
+            version = entry.get("version", "")
+
+            for rel_path in entry.get("used_in", []):
+                self._verify_sha(rel_path, action, sha, version)
+
+    def _verify_sha(self, rel_path, action, sha, version):
+        """Compare a single action SHA in a workflow file."""
+        target = self.REPO_ROOT / rel_path
+        if not target.is_file():
+            self._logger.info(
+                "  FAIL: %s listed in manifest but file not found",
+                rel_path,
+            )
+            self._errors += 1
+            return
+
+        text = target.read_text()
+        found_shas = set(self.USES_RE.findall(text))
+        action_shas = {s for a, s in found_shas if a == action}
+
+        if not action_shas:
+            self._logger.info(
+                "  FAIL: %s not found in %s", action, rel_path
+            )
+            self._errors += 1
+            return
+
+        if len(action_shas) > 1:
+            self._logger.info(
+                "  FAIL: %s: %s has mixed SHAs:", rel_path, action
+            )
+            for s in sorted(action_shas):
+                self._logger.info("        %s", s)
+            self._errors += 1
+            return
+
+        actual_sha = action_shas.pop()
+        if actual_sha != sha:
+            self._logger.info("  FAIL: %s: %s", rel_path, action)
+            self._logger.info("        manifest: %s (%s)", sha, version)
+            self._logger.info("        actual:   %s", actual_sha)
+            self._errors += 1
+        else:
+            self._logger.info(
+                "  OK:   %s: %s@%s", rel_path, action, version
+            )
+
+    def _check_untracked(self, manifest):
+        """Check 2: every third-party action in repo is tracked."""
+        self._logger.info("")
+        self._logger.info(
+            "=== Check 2: All actions in repo are in the manifest ==="
+        )
+
+        manifested = {
+            entry.get("action", "")
+            for entry in manifest.get("actions", [])
+        }
+
+        for rel_dir in self.SCAN_DIRS:
+            scan_dir = self.REPO_ROOT / rel_dir
+            if not scan_dir.is_dir():
                 continue
+            for yaml_file in sorted(scan_dir.rglob("*.yml")):
+                self._check_file(yaml_file, manifested)
+            for yaml_file in sorted(scan_dir.rglob("*.yaml")):
+                self._check_file(yaml_file, manifested)
 
-            text = target.read_text()
-            found_shas = set(USES_RE.findall(text))
-            # Filter to only matches for this action
-            action_shas = {s for a, s in found_shas if a == action}
+    def _check_file(self, yaml_file, manifested):
+        """Scan a single file for untracked actions."""
+        rel_path = yaml_file.relative_to(self.REPO_ROOT)
+        text = yaml_file.read_text()
+        refs = set(self.USES_RE.findall(text))
 
-            if not action_shas:
-                print(f"  FAIL: {action} not found in {rel_path}")
-                errors += 1
-                continue
+        for action, _ in refs:
+            if action not in manifested:
+                self._logger.info(
+                    "  FAIL: %s uses %s which is NOT in the manifest",
+                    rel_path,
+                    action,
+                )
+                self._errors += 1
 
-            if len(action_shas) > 1:
-                print(f"  FAIL: {rel_path}: {action} has mixed SHAs:")
-                for s in sorted(action_shas):
-                    print(f"        {s}")
-                errors += 1
-                continue
+    def run(self):
+        """Execute all checks and exit non-zero on failure."""
+        if not self.MANIFEST.is_file():
+            self._logger.error(
+                "ERROR: Manifest not found at %s", self.MANIFEST
+            )
+            sys.exit(1)
 
-            actual_sha = action_shas.pop()
-            if actual_sha != sha:
-                print(f"  FAIL: {rel_path}: {action}")
-                print(f"        manifest: {sha} ({version})")
-                print(f"        actual:   {actual_sha}")
-                errors += 1
-            else:
-                print(f"  OK:   {rel_path}: {action}@{version}")
+        manifest = self._load_manifest()
+        self._check_shas(manifest)
+        self._check_untracked(manifest)
 
-    return errors
+        self._logger.info("")
+        if self._errors > 0:
+            self._logger.info("FAILED: %d issue(s) found.", self._errors)
+            self._logger.info(
+                "Run 'scripts/sync-actions-manifest.py' to fix SHA drift,"
+            )
+            self._logger.info(
+                "or add missing actions to actions-manifest.yml."
+            )
+            sys.exit(1)
+        else:
+            self._logger.info(
+                "PASSED: Manifest is complete and consistent."
+            )
 
-
-def check_untracked(manifest):
-    """Check 2: every third-party action in repo is in the manifest."""
-    errors = 0
-    print("")
-    print("=== Check 2: All actions in repo are in the manifest ===")
-
-    manifested = {entry["action"] for entry in manifest["actions"]}
-
-    scan_dirs = [
-        REPO_ROOT / ".github" / "workflows",
-        REPO_ROOT / "actions",
-    ]
-
-    for scan_dir in scan_dirs:
-        if not scan_dir.is_dir():
-            continue
-        for yaml_file in sorted(scan_dir.rglob("*.yml")):
-            _check_file(yaml_file, manifested, errors_ref=[errors])
-            errors = _check_file.last_errors
-        for yaml_file in sorted(scan_dir.rglob("*.yaml")):
-            _check_file(yaml_file, manifested, errors_ref=[errors])
-            errors = _check_file.last_errors
-
-    return errors
-
-
-def _check_file(yaml_file, manifested, errors_ref):
-    """Scan a single file for untracked actions."""
-    errors = errors_ref[0]
-    rel_path = yaml_file.relative_to(REPO_ROOT)
-    text = yaml_file.read_text()
-    refs = set(USES_RE.findall(text))
-
-    for action, _ in refs:
-        if action not in manifested:
-            print(f"  FAIL: {rel_path} uses {action} which is NOT in the manifest")
-            errors += 1
-
-    _check_file.last_errors = errors
-
-
-_check_file.last_errors = 0
-
-
-def main():
-    if not MANIFEST.is_file():
-        print(f"ERROR: Manifest not found at {MANIFEST}", file=sys.stderr)
-        sys.exit(1)
-
-    manifest = load_manifest()
-    errors = 0
-    errors += check_shas(manifest)
-    errors += check_untracked(manifest)
-
-    print("")
-    if errors > 0:
-        print(f"FAILED: {errors} issue(s) found.")
-        print("Run 'scripts/sync-actions-manifest.py' to fix SHA drift,")
-        print("or add missing actions to actions-manifest.yml.")
-        sys.exit(1)
-    else:
-        print("PASSED: Manifest is complete and consistent.")
+    @staticmethod
+    def main():
+        """Entry point."""
+        ManifestChecker().run()
 
 
 if __name__ == "__main__":
-    main()
+    ManifestChecker.main()
