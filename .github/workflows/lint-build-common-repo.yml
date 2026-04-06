@@ -54,6 +54,17 @@ jobs:
             .github/workflows/*.yml
 
 
+  python-quality-gate:
+    name: Python Quality Gate
+    uses: ./.github/workflows/_python-quality-gate.yml
+    with:
+      sources: scripts
+      run-pylint: false
+      run-pytest: false
+      run-shellcheck: false
+      enable-slack: false
+      build-common-ref: ${{ github.head_ref || github.ref_name }}
+
   manifest-check:
     name: Check actions manifest
     runs-on: ubuntu-latest
