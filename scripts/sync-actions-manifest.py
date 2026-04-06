@@ -35,9 +35,7 @@ class ManifestSyncer:
     # "  # yamllint disable-line rule:line-length".
     # Used to detect the two-line pattern where a version comment
     # sits above a yamllint disable comment, which sits above uses:.
-    YAMLLINT_DISABLE_RE = re.compile(
-        r"^\s*#\s*yamllint\s+disable-line\s+"
-    )
+    YAMLLINT_DISABLE_RE = re.compile(r"^\s*#\s*yamllint\s+disable-line\s+")
 
     def __init__(self, check_only=False):
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -53,9 +51,7 @@ class ManifestSyncer:
         """Sync a single action reference in one workflow file."""
         target = self.REPO_ROOT / rel_path
         if not target.is_file():
-            self._logger.warning(
-                "WARN: %s listed in manifest but not found", rel_path
-            )
+            self._logger.warning("WARN: %s listed in manifest but not found", rel_path)
             return
 
         lines = target.read_text().splitlines(keepends=True)
@@ -63,9 +59,7 @@ class ManifestSyncer:
         # Dynamic pattern for this specific action, e.g.
         # (uses:\s+actions/checkout@)([0-9a-f]+)
         # Captures: group(1) = prefix up to @, group(2) = current sha
-        uses_re = re.compile(
-            rf"(uses:\s+{re.escape(action)}@)([0-9a-f]+)"
-        )
+        uses_re = re.compile(rf"(uses:\s+{re.escape(action)}@)([0-9a-f]+)")
 
         # Collect unique SHAs currently present for this action.
         current_shas = set()
@@ -75,17 +69,13 @@ class ManifestSyncer:
                 current_shas.add(match.group(2))
 
         if not current_shas:
-            self._logger.warning(
-                "WARN: %s not found in %s", action, rel_path
-            )
+            self._logger.warning("WARN: %s not found in %s", action, rel_path)
             return
 
         if current_shas == {sha}:
             return
 
-        self._logger.info(
-            "DRIFT: %s: %s -> @%s (%s)", rel_path, action, sha, version
-        )
+        self._logger.info("DRIFT: %s: %s -> @%s (%s)", rel_path, action, sha, version)
         self._drift = True
 
         if self._check_only:
@@ -107,21 +97,15 @@ class ManifestSyncer:
                 # One-line pattern: version comment directly above.
                 # Two-line pattern: version comment, then a
                 # yamllint disable-line comment, then uses:.
-                if (i > 0
-                        and self.VERSION_COMMENT_RE.match(
-                            new_lines[i - 1])):
-                    indent = re.match(
-                        r"(\s*)", new_lines[i - 1]
-                    ).group(1)
+                if i > 0 and self.VERSION_COMMENT_RE.match(new_lines[i - 1]):
+                    indent = re.match(r"(\s*)", new_lines[i - 1]).group(1)
                     new_lines[i - 1] = "%s# %s\n" % (indent, version)
-                elif (i > 1
-                      and self.YAMLLINT_DISABLE_RE.match(
-                          new_lines[i - 1])
-                      and self.VERSION_COMMENT_RE.match(
-                          new_lines[i - 2])):
-                    indent = re.match(
-                        r"(\s*)", new_lines[i - 2]
-                    ).group(1)
+                elif (
+                    i > 1
+                    and self.YAMLLINT_DISABLE_RE.match(new_lines[i - 1])
+                    and self.VERSION_COMMENT_RE.match(new_lines[i - 2])
+                ):
+                    indent = re.match(r"(\s*)", new_lines[i - 2]).group(1)
                     new_lines[i - 2] = "%s# %s\n" % (indent, version)
 
             new_lines.append(line)
@@ -130,9 +114,7 @@ class ManifestSyncer:
     def run(self):
         """Sync all manifest entries and report results."""
         if not self.MANIFEST.is_file():
-            self._logger.error(
-                "ERROR: Manifest not found at %s", self.MANIFEST
-            )
+            self._logger.error("ERROR: Manifest not found at %s", self.MANIFEST)
             sys.exit(1)
 
         manifest = self._load_manifest()
