@@ -8,6 +8,8 @@ Checks performed:
   1. Every SHA in the manifest matches the actual files.
   2. Every third-party "uses:" reference in repo YAML
      files appears in the manifest (no untracked actions).
+  3. No action references use a plain version tag instead
+     of a pinned SHA (e.g. @v4.1.1 instead of @abc123…).
 
 Usage:
   scripts/check-actions-manifest.py          # from repo root
@@ -28,9 +30,21 @@ class ManifestChecker:
 
     REPO_ROOT = Path(__file__).resolve().parent.parent
     MANIFEST = REPO_ROOT / "actions-manifest.yml"
+    # Matches: uses: owner/repo@<40-hex-char-sha>
+    # Captures: group(1) = owner/repo, group(2) = sha
     USES_RE = re.compile(
         r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@([0-9a-f]+)"
     )
+
+    # Matches any uses: owner/repo@<ref> — including tags, branches,
+    # and SHAs.  Used to detect references that are NOT SHA-pinned.
+    # Captures: group(1) = owner/repo, group(2) = ref (tag, branch, or sha)
+    ANY_USES_RE = re.compile(
+        r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@(\S+)"
+    )
+
+    # 40-character lower-case hex string — the format of a full git SHA.
+    _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
     # Directories to scan for untracked action references.
     SCAN_DIRS = [".github/workflows", "actions"]
@@ -136,6 +150,39 @@ class ManifestChecker:
                 )
                 self._errors += 1
 
+    def _check_unpinned(self):
+        """Check 3: no action ref uses a tag/branch instead of a SHA."""
+        self._logger.info("")
+        self._logger.info(
+            "=== Check 3: All action refs are SHA-pinned ==="
+        )
+
+        for rel_dir in self.SCAN_DIRS:
+            scan_dir = self.REPO_ROOT / rel_dir
+            if not scan_dir.is_dir():
+                continue
+            for yaml_file in sorted(scan_dir.rglob("*.yml")):
+                self._check_file_pinned(yaml_file)
+            for yaml_file in sorted(scan_dir.rglob("*.yaml")):
+                self._check_file_pinned(yaml_file)
+
+    def _check_file_pinned(self, yaml_file):
+        """Flag any uses: lines whose ref is not a full 40-char hex SHA."""
+        rel_path = yaml_file.relative_to(self.REPO_ROOT)
+        text = yaml_file.read_text()
+
+        for match in self.ANY_USES_RE.finditer(text):
+            action = match.group(1)
+            ref = match.group(2)
+            if not self._SHA_RE.match(ref):
+                self._logger.info(
+                    "  FAIL: %s uses %s@%s — not a pinned SHA",
+                    rel_path,
+                    action,
+                    ref,
+                )
+                self._errors += 1
+
     def run(self):
         """Execute all checks and exit non-zero on failure."""
         if not self.MANIFEST.is_file():
@@ -147,6 +194,7 @@ class ManifestChecker:
         manifest = self._load_manifest()
         self._check_shas(manifest)
         self._check_untracked(manifest)
+        self._check_unpinned()
 
         self._logger.info("")
         if self._errors > 0:

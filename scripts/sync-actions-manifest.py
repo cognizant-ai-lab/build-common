@@ -26,7 +26,15 @@ class ManifestSyncer:
 
     REPO_ROOT = Path(__file__).resolve().parent.parent
     MANIFEST = REPO_ROOT / "actions-manifest.yml"
+    # Matches a YAML comment that starts with a version string, e.g.
+    # "  # v6.0.2" or "  # 2.3.33".  Captures the leading whitespace
+    # so the replacement can preserve indentation.
     VERSION_COMMENT_RE = re.compile(r"^(\s*)#\s*v?\d+\.\d+")
+
+    # Matches a yamllint inline-disable comment, e.g.
+    # "  # yamllint disable-line rule:line-length".
+    # Used to detect the two-line pattern where a version comment
+    # sits above a yamllint disable comment, which sits above uses:.
     YAMLLINT_DISABLE_RE = re.compile(
         r"^\s*#\s*yamllint\s+disable-line\s+"
     )
@@ -51,6 +59,10 @@ class ManifestSyncer:
             return
 
         lines = target.read_text().splitlines(keepends=True)
+
+        # Dynamic pattern for this specific action, e.g.
+        # (uses:\s+actions/checkout@)([0-9a-f]+)
+        # Captures: group(1) = prefix up to @, group(2) = current sha
         uses_re = re.compile(
             rf"(uses:\s+{re.escape(action)}@)([0-9a-f]+)"
         )
