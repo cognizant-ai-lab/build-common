@@ -122,7 +122,7 @@ class ManifestChecker:
         """Scan a single file for untracked actions."""
         rel_path = yaml_file.relative_to(self.REPO_ROOT)
         text = yaml_file.read_text()
-        refs = set(self.USES_RE.findall(text))
+        refs = set(self.ANY_USES_RE.findall(text))
 
         for action, _ in refs:
             if action not in manifested:
