@@ -72,10 +72,10 @@ jobs:
       # v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Install PyYAML
+      - name: Install dependencies
         shell: bash
         run: |
-          pip install 'pyyaml==6.0.3'
+          pip install --requirement requirements.txt
 
       - name: Validate actions manifest
         shell: bash
