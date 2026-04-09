@@ -15,10 +15,13 @@ Usage:
   scripts/check-actions-manifest.py          # from repo root
 """
 
+from __future__ import annotations
+
 import logging
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -28,47 +31,52 @@ logging.basicConfig(format="%(message)s", level=logging.INFO)
 class ManifestChecker:
     """Validates actions-manifest.yml against repo files."""
 
-    REPO_ROOT = Path(__file__).resolve().parent.parent
-    MANIFEST = REPO_ROOT / "actions-manifest.yml"
+    REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+    MANIFEST: Path = REPO_ROOT / "actions-manifest.yml"
     # Matches: uses: owner/repo@<40-hex-char-sha>
     # Captures: group(1) = owner/repo, group(2) = sha
-    USES_RE = re.compile(r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@([0-9a-f]+)")
+    USES_RE: re.Pattern[str] = re.compile(
+        r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@([0-9a-f]+)"
+    )
 
     # Matches any uses: owner/repo@<ref> — including tags, branches,
     # and SHAs.  Used to detect references that are NOT SHA-pinned.
     # Captures: group(1) = owner/repo, group(2) = ref (tag, branch, or sha)
-    ANY_USES_RE = re.compile(r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@(\S+)")
+    ANY_USES_RE: re.Pattern[str] = re.compile(
+        r"uses:\s+([A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+)@(\S+)"
+    )
 
     # 40-character lower-case hex string — the format of a full git SHA.
-    _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+    _SHA_RE: re.Pattern[str] = re.compile(r"^[0-9a-f]{40}$")
 
     # Directories to scan for untracked action references.
-    SCAN_DIRS = [".github/workflows", "actions"]
+    SCAN_DIRS: list[str] = [".github/workflows", "actions"]
 
-    def __init__(self):
-        self._logger = logging.getLogger(self.__class__.__name__)
-        self._errors = 0
+    def __init__(self) -> None:
+        self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+        self._errors: int = 0
 
-    def _load_manifest(self):
+    def _load_manifest(self) -> dict[str, Any]:
         """Read and parse actions-manifest.yml."""
         with open(self.MANIFEST) as fh:
-            return yaml.safe_load(fh)
+            manifest: dict[str, Any] = yaml.safe_load(fh)
+            return manifest
 
-    def _check_shas(self, manifest):
+    def _check_shas(self, manifest: dict[str, Any]) -> None:
         """Check 1: every manifest SHA matches the actual files."""
         self._logger.info("=== Check 1: Manifest SHAs match workflow files ===")
 
         for entry in manifest.get("actions", []):
-            action = entry.get("action", "")
-            sha = entry.get("sha", "")
-            version = entry.get("version", "")
+            action: str = entry.get("action", "")
+            sha: str = entry.get("sha", "")
+            version: str = entry.get("version", "")
 
             for rel_path in entry.get("used_in", []):
                 self._verify_sha(rel_path, action, sha, version)
 
-    def _verify_sha(self, rel_path, action, sha, version):
+    def _verify_sha(self, rel_path: str, action: str, sha: str, version: str) -> None:
         """Compare a single action SHA in a workflow file."""
-        target = self.REPO_ROOT / rel_path
+        target: Path = self.REPO_ROOT / rel_path
         if not target.is_file():
             self._logger.info(
                 "  FAIL: %s listed in manifest but file not found",
@@ -77,9 +85,9 @@ class ManifestChecker:
             self._errors += 1
             return
 
-        text = target.read_text()
-        found_shas = set(self.USES_RE.findall(text))
-        action_shas = {s for a, s in found_shas if a == action}
+        text: str = target.read_text()
+        found_shas: set[tuple[str, str]] = set(self.USES_RE.findall(text))
+        action_shas: set[str] = {s for a, s in found_shas if a == action}
 
         if not action_shas:
             self._logger.info("  FAIL: %s not found in %s", action, rel_path)
@@ -93,7 +101,7 @@ class ManifestChecker:
             self._errors += 1
             return
 
-        actual_sha = action_shas.pop()
+        actual_sha: str = action_shas.pop()
         if actual_sha != sha:
             self._logger.info("  FAIL: %s: %s", rel_path, action)
             self._logger.info("        manifest: %s (%s)", sha, version)
@@ -102,15 +110,17 @@ class ManifestChecker:
         else:
             self._logger.info("  OK:   %s: %s@%s", rel_path, action, version)
 
-    def _check_untracked(self, manifest):
+    def _check_untracked(self, manifest: dict[str, Any]) -> None:
         """Check 2: every third-party action in repo is tracked."""
         self._logger.info("")
         self._logger.info("=== Check 2: All actions in repo are in the manifest ===")
 
-        manifested = {entry.get("action", "") for entry in manifest.get("actions", [])}
+        manifested: set[str] = {
+            entry.get("action", "") for entry in manifest.get("actions", [])
+        }
 
         for rel_dir in self.SCAN_DIRS:
-            scan_dir = self.REPO_ROOT / rel_dir
+            scan_dir: Path = self.REPO_ROOT / rel_dir
             if not scan_dir.is_dir():
                 continue
             for yaml_file in sorted(scan_dir.rglob("*.yml")):
@@ -118,11 +128,11 @@ class ManifestChecker:
             for yaml_file in sorted(scan_dir.rglob("*.yaml")):
                 self._check_file(yaml_file, manifested)
 
-    def _check_file(self, yaml_file, manifested):
+    def _check_file(self, yaml_file: Path, manifested: set[str]) -> None:
         """Scan a single file for untracked actions."""
-        rel_path = yaml_file.relative_to(self.REPO_ROOT)
-        text = yaml_file.read_text()
-        refs = set(self.ANY_USES_RE.findall(text))
+        rel_path: Path = yaml_file.relative_to(self.REPO_ROOT)
+        text: str = yaml_file.read_text()
+        refs: set[tuple[str, str]] = set(self.ANY_USES_RE.findall(text))
 
         for action, _ in refs:
             if action not in manifested:
@@ -133,13 +143,13 @@ class ManifestChecker:
                 )
                 self._errors += 1
 
-    def _check_unpinned(self):
+    def _check_unpinned(self) -> None:
         """Check 3: no action ref uses a tag/branch instead of a SHA."""
         self._logger.info("")
         self._logger.info("=== Check 3: All action refs are SHA-pinned ===")
 
         for rel_dir in self.SCAN_DIRS:
-            scan_dir = self.REPO_ROOT / rel_dir
+            scan_dir: Path = self.REPO_ROOT / rel_dir
             if not scan_dir.is_dir():
                 continue
             for yaml_file in sorted(scan_dir.rglob("*.yml")):
@@ -147,14 +157,14 @@ class ManifestChecker:
             for yaml_file in sorted(scan_dir.rglob("*.yaml")):
                 self._check_file_pinned(yaml_file)
 
-    def _check_file_pinned(self, yaml_file):
+    def _check_file_pinned(self, yaml_file: Path) -> None:
         """Flag any uses: lines whose ref is not a full 40-char hex SHA."""
-        rel_path = yaml_file.relative_to(self.REPO_ROOT)
-        text = yaml_file.read_text()
+        rel_path: Path = yaml_file.relative_to(self.REPO_ROOT)
+        text: str = yaml_file.read_text()
 
         for match in self.ANY_USES_RE.finditer(text):
-            action = match.group(1)
-            ref = match.group(2)
+            action: str = match.group(1)
+            ref: str = match.group(2)
             if not self._SHA_RE.match(ref):
                 self._logger.info(
                     "  FAIL: %s uses %s@%s — not a pinned SHA",
@@ -164,13 +174,13 @@ class ManifestChecker:
                 )
                 self._errors += 1
 
-    def run(self):
+    def run(self) -> None:
         """Execute all checks and exit non-zero on failure."""
         if not self.MANIFEST.is_file():
             self._logger.error("ERROR: Manifest not found at %s", self.MANIFEST)
             sys.exit(1)
 
-        manifest = self._load_manifest()
+        manifest: dict[str, Any] = self._load_manifest()
         self._check_shas(manifest)
         self._check_untracked(manifest)
         self._check_unpinned()
@@ -187,7 +197,7 @@ class ManifestChecker:
             self._logger.info("PASSED: Manifest is complete and consistent.")
 
     @staticmethod
-    def main():
+    def main() -> None:
         """Entry point."""
         ManifestChecker().run()
 
