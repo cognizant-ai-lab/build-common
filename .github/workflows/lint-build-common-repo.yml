@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  yamllint:
-    name: Lint YAML syntax
+  lint:
+    name: Lint YAML and GitHub Actions
     runs-on: ubuntu-latest
     steps:
       # v6.0.2
@@ -28,15 +28,8 @@ jobs:
         run: |
           yamllint --strict .github/workflows/ actions/
 
-
-  actionlint:
-    name: Lint GitHub Actions
-    runs-on: ubuntu-latest
-    steps:
-      # v6.0.2
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-
       - name: Install actionlint
+        if: success() || failure()
         shell: bash
         env:
           ACTIONLINT_VERSION: ${{ vars.ACTIONLINT_VERSION }}
@@ -48,6 +41,7 @@ jobs:
       # action metadata (action.yml). The actions/ directory is
       # covered by yamllint for YAML syntax validation instead.
       - name: Run actionlint
+        if: success() || failure()
         shell: bash
         run: |
           actionlint -color \
