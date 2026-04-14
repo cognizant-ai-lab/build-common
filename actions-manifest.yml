@@ -1,0 +1,83 @@
+---
+# Actions Manifest for build-common
+#
+# Single source of truth for all third-party GitHub Actions
+# used across workflows and composite actions in this repo.
+#
+# Fields:
+#   action   - GitHub action reference (owner/repo)
+#   version  - Human-readable version tag
+#   sha      - Pinned commit SHA used in workflow files
+#   node     - Action runtime (node24, docker, etc.)
+#   used_in  - Files that reference this action
+#
+# Maintainers: update this file whenever an action version
+# is changed, then run scripts/sync-actions-manifest.py to
+# patch the workflow files.  Run a periodic review to ensure
+# all SHAs still point to the latest patch of their major
+# version.
+
+actions:
+  - action: actions/checkout
+    version: v6.0.2
+    sha: de0fac2e4500dabe0009e67214ff5f5447ce83dd
+    node: node24
+    used_in:
+      - .github/workflows/_python-quality-gate.yml
+      - .github/workflows/lint-build-common-repo.yml
+
+  - action: actions/setup-python
+    version: v6.2.0
+    sha: a309ff8b426b58ec0e2a45f0f869d46889d02405
+    node: node24
+    used_in:
+      - actions/setup-python-env/action.yml
+
+  - action: actions/setup-node
+    version: v6.3.0
+    sha: 53b83947a5a98c8d113130e565377fae1a50d02f
+    node: node24
+    used_in:
+      - actions/setup-node-env/action.yml
+
+  - action: aws-actions/configure-aws-credentials
+    version: v6.0.0
+    sha: 8df5847569e6427dd6c4fb1cf565c83acfa8afa7
+    node: node24
+    used_in:
+      - actions/aws-ecr-auth/action.yml
+
+  - action: aws-actions/amazon-ecr-login
+    version: v2.0.2
+    sha: 006813a119ae0fdeb70ae00f16cda21ee6f2ff3d
+    node: node24
+    used_in:
+      - actions/aws-ecr-auth/action.yml
+
+  - action: docker/setup-buildx-action
+    version: v4.0.0
+    sha: 4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+    node: node24
+    used_in:
+      - actions/docker-buildx-push/action.yml
+
+  - action: docker/build-push-action
+    version: v7.0.0
+    sha: d08e5c354a6adb9ed34480a06d141179aa583294
+    node: node24
+    used_in:
+      - actions/docker-buildx-push/action.yml
+
+  - action: Checkmarx/ast-github-action
+    version: "2.3.33"
+    sha: c52fa63dbd4916520882e10456d66ff4dd7bf754
+    node: docker
+    used_in:
+      - actions/checkmarx-one/action.yml
+
+  - action: slackapi/slack-github-action
+    version: v3.0.1
+    sha: af78098f536edbc4de71162a307590698245be95
+    node: node24
+    used_in:
+      - actions/slack-notify/action.yml

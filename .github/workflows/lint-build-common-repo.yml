@@ -46,3 +46,32 @@ jobs:
         run: |
           actionlint -color \
             .github/workflows/*.yml
+
+
+  python-quality-gate:
+    name: Python Quality Gate
+    uses: ./.github/workflows/_python-quality-gate.yml
+    with:
+      sources: scripts
+      run-pylint: false
+      run-pytest: false
+      run-shellcheck: false
+      enable-slack: false
+      build-common-ref: ${{ github.head_ref || github.ref_name }}
+
+  manifest-check:
+    name: Check actions manifest
+    runs-on: ubuntu-latest
+    steps:
+      # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          pip install --requirement requirements.txt
+
+      - name: Validate actions manifest
+        shell: bash
+        run: |
+          scripts/check-actions-manifest.py
