@@ -84,7 +84,7 @@ runs:
           ${{ github.event.pull_request.head.repo.full_name }}
         GH_SELF_REPO: ${{ github.repository }}
       run: >-
-        "${{ github.action_path }}/scripts/check-fork.sh"
+        "$GITHUB_ACTION_PATH/scripts/check-fork.sh"
 
     - name: Validate inputs
       if: >-
@@ -99,7 +99,7 @@ runs:
         INPUT_CLIENT_ID: ${{ inputs.cx-client-id }}
         INPUT_CLIENT_SECRET: ${{ inputs.cx-client-secret }}
       run: >-
-        "${{ github.action_path }}/scripts/validate-inputs.sh"
+        "$GITHUB_ACTION_PATH/scripts/validate-inputs.sh"
 
     - name: Run Checkmarx One scan
       id: scan

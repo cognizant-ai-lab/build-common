@@ -48,7 +48,7 @@ runs:
           ${{ github.event.pull_request.head.repo.full_name }}
         GH_SELF_REPO: ${{ github.repository }}
       run: >-
-        "${{ github.action_path }}/scripts/check-fork.sh"
+        "$GITHUB_ACTION_PATH/scripts/check-fork.sh"
 
     - name: Build notification payload
       id: notification
@@ -70,7 +70,7 @@ runs:
         GH_WORKFLOW: ${{ github.workflow }}
         GH_ACTOR: ${{ github.actor }}
       run: >-
-        "${{ github.action_path }}/scripts/build-payload.sh"
+        "$GITHUB_ACTION_PATH/scripts/build-payload.sh"
 
     - name: Send Slack notification
       if: >-
