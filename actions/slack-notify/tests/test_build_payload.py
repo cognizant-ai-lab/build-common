@@ -59,7 +59,7 @@ def _context_text(payload: dict) -> str:
 
 def test_success_payload_shape():
     mod = _load_module()
-    payload = mod.build_payload(_env(INPUT_STATUS="success"))
+    payload = mod.SlackPayloadBuilder(_env(INPUT_STATUS="success")).build_payload()
 
     attachment = payload["attachments"][0]
     assert attachment["color"] == "good"
@@ -78,9 +78,9 @@ def test_success_payload_shape():
 
 def test_failure_with_mention_prepends_channel():
     mod = _load_module()
-    payload = mod.build_payload(
+    payload = mod.SlackPayloadBuilder(
         _env(INPUT_STATUS="failure", INPUT_MENTION="true"),
-    )
+    ).build_payload()
 
     assert payload["attachments"][0]["color"] == "danger"
     section = _section_text(payload)
@@ -90,9 +90,9 @@ def test_failure_with_mention_prepends_channel():
 
 def test_failure_without_mention_has_no_channel_prefix():
     mod = _load_module()
-    payload = mod.build_payload(
+    payload = mod.SlackPayloadBuilder(
         _env(INPUT_STATUS="failure", INPUT_MENTION="false"),
-    )
+    ).build_payload()
 
     section = _section_text(payload)
     assert not section.startswith("<!channel>")
@@ -101,7 +101,7 @@ def test_failure_without_mention_has_no_channel_prefix():
 
 def test_cancelled_payload_uses_warning_styling():
     mod = _load_module()
-    payload = mod.build_payload(_env(INPUT_STATUS="cancelled"))
+    payload = mod.SlackPayloadBuilder(_env(INPUT_STATUS="cancelled")).build_payload()
 
     assert payload["attachments"][0]["color"] == "warning"
     section = _section_text(payload)
@@ -111,7 +111,7 @@ def test_cancelled_payload_uses_warning_styling():
 
 def test_unknown_status_falls_through_to_neutral_styling():
     mod = _load_module()
-    payload = mod.build_payload(_env(INPUT_STATUS="mystery"))
+    payload = mod.SlackPayloadBuilder(_env(INPUT_STATUS="mystery")).build_payload()
 
     assert payload["attachments"][0]["color"] == "#808080"
     section = _section_text(payload)
@@ -121,9 +121,9 @@ def test_unknown_status_falls_through_to_neutral_styling():
 
 def test_custom_message_overrides_status_text():
     mod = _load_module()
-    payload = mod.build_payload(
+    payload = mod.SlackPayloadBuilder(
         _env(INPUT_STATUS="success", INPUT_MESSAGE="All green"),
-    )
+    ).build_payload()
 
     section = _section_text(payload)
     assert "*All green*" in section
@@ -132,9 +132,9 @@ def test_custom_message_overrides_status_text():
 
 def test_mention_is_ignored_on_success():
     mod = _load_module()
-    payload = mod.build_payload(
+    payload = mod.SlackPayloadBuilder(
         _env(INPUT_STATUS="success", INPUT_MENTION="true"),
-    )
+    ).build_payload()
 
     section = _section_text(payload)
     assert not section.startswith("<!channel>")
@@ -149,21 +149,22 @@ def test_payload_is_json_round_trippable_with_special_characters():
     fail.
     """
     mod = _load_module()
-    payload = mod.build_payload(
+    payload = mod.SlackPayloadBuilder(
         _env(
             INPUT_STATUS="success",
             INPUT_MESSAGE='Quoted "stuff" and \\ backslashes',
         ),
-    )
+    ).build_payload()
 
     assert json.loads(json.dumps(payload)) == payload
 
 
 def test_format_github_output_wraps_payload_in_heredoc():
     mod = _load_module()
-    payload = mod.build_payload(_env(INPUT_STATUS="success"))
+    builder = mod.SlackPayloadBuilder(_env(INPUT_STATUS="success"))
+    payload = builder.build_payload()
 
-    line = mod._format_github_output(payload)
+    line = builder.format_github_output(payload)
     assert line.startswith("payload<<PAYLOAD_EOF\n")
     assert line.endswith("PAYLOAD_EOF\n")
 
