@@ -2,25 +2,20 @@
 
 These exercise the payload builder in isolation -- no network, no
 GitHub Actions runtime required -- so they can run as part of the
-standard pytest step in CI.  The script is loaded by file path
-because it lives next to ``action.yml`` rather than in an importable
-package.
+standard pytest step in CI.  ``conftest.py`` in this directory puts
+the sibling ``scripts/`` directory on ``sys.path`` so the module can
+be imported with a plain ``import`` statement.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import pathlib
-from types import ModuleType
+
+from build_payload import SlackPayloadBuilder
 
 
 class TestBuildPayload:
     """Tests for the ``SlackPayloadBuilder`` class."""
-
-    SCRIPT_PATH: pathlib.Path = (
-        pathlib.Path(__file__).resolve().parent.parent / "scripts" / "build_payload.py"
-    )
 
     BASE_ENV: dict = {
         "GH_REPO": "cognizant-ai-lab/example",
@@ -32,23 +27,6 @@ class TestBuildPayload:
         "INPUT_MESSAGE": "",
         "INPUT_MENTION": "false",
     }
-
-    @classmethod
-    def _load_module(cls) -> ModuleType:
-        """Load ``build_payload.py`` by file path.
-
-        The script lives next to ``action.yml`` rather than in an
-        importable package, so we use ``importlib.util`` to pull it
-        in for tests.
-        """
-        spec = importlib.util.spec_from_file_location(
-            "build_payload",
-            cls.SCRIPT_PATH,
-        )
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
 
     @classmethod
     def _env(cls, **overrides: str) -> dict:
@@ -68,8 +46,7 @@ class TestBuildPayload:
         return payload["attachments"][0]["blocks"][1]["elements"][0]["text"]
 
     def test_success_payload_shape(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success"),
         ).build_payload()
 
@@ -91,8 +68,7 @@ class TestBuildPayload:
         )
 
     def test_failure_with_mention_prepends_channel(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="failure", INPUT_MENTION="true"),
         ).build_payload()
 
@@ -102,8 +78,7 @@ class TestBuildPayload:
         assert "*Failed*" in section
 
     def test_failure_without_mention_has_no_channel_prefix(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="failure", INPUT_MENTION="false"),
         ).build_payload()
 
@@ -112,8 +87,7 @@ class TestBuildPayload:
         assert ":x:" in section
 
     def test_cancelled_payload_uses_warning_styling(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="cancelled"),
         ).build_payload()
 
@@ -123,8 +97,7 @@ class TestBuildPayload:
         assert "*Cancelled*" in section
 
     def test_unknown_status_falls_through_to_neutral_styling(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="mystery"),
         ).build_payload()
 
@@ -134,8 +107,7 @@ class TestBuildPayload:
         assert "*mystery*" in section
 
     def test_custom_message_overrides_status_text(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success", INPUT_MESSAGE="All green"),
         ).build_payload()
 
@@ -144,8 +116,7 @@ class TestBuildPayload:
         assert "*Passed*" not in section
 
     def test_mention_is_ignored_on_success(self) -> None:
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success", INPUT_MENTION="true"),
         ).build_payload()
 
@@ -160,8 +131,7 @@ class TestBuildPayload:
         to string concatenation without proper escaping, this test will
         fail.
         """
-        mod = self._load_module()
-        payload = mod.SlackPayloadBuilder(
+        payload = SlackPayloadBuilder(
             self._env(
                 INPUT_STATUS="success",
                 INPUT_MESSAGE='Quoted "stuff" and \\ backslashes',
@@ -171,8 +141,7 @@ class TestBuildPayload:
         assert json.loads(json.dumps(payload)) == payload
 
     def test_format_github_output_wraps_payload_in_heredoc(self) -> None:
-        mod = self._load_module()
-        builder = mod.SlackPayloadBuilder(self._env(INPUT_STATUS="success"))
+        builder = SlackPayloadBuilder(self._env(INPUT_STATUS="success"))
         payload = builder.build_payload()
 
         line = builder.format_github_output(payload)
