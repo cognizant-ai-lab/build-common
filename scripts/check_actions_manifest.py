@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check-actions-manifest.py
+"""check_actions_manifest.py
 
 Validates that actions-manifest.yml is complete and
 consistent with the workflow and composite-action files.
@@ -12,7 +12,7 @@ Checks performed:
      of a pinned SHA (e.g. @v4.1.1 instead of @abc123…).
 
 Usage:
-  scripts/check-actions-manifest.py          # from repo root
+  scripts/check_actions_manifest.py          # from repo root
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ class ManifestChecker:
         if self._errors > 0:
             self._logger.info("FAILED: %d issue(s) found.", self._errors)
             self._logger.info(
-                "Run 'scripts/sync-actions-manifest.py' to fix SHA drift,"
+                "Run 'scripts/sync_actions_manifest.py' to fix SHA drift,"
             )
             self._logger.info("or add missing actions to actions-manifest.yml.")
             sys.exit(1)
