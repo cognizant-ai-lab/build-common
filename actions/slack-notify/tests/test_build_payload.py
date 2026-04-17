@@ -10,6 +10,7 @@ be imported with a plain ``import`` statement.
 from __future__ import annotations
 
 import json
+import logging
 
 from build_payload import SlackPayloadBuilder
 
@@ -140,15 +141,45 @@ class TestBuildPayload:
         assert ":warning:" in section
         assert "*Cancelled*" in section
 
-    def test_unknown_status_falls_through_to_neutral_styling(self) -> None:
-        payload = SlackPayloadBuilder(
-            self._env(INPUT_STATUS="mystery"),
-        ).build_payload()
+    def test_unknown_status_falls_through_to_neutral_styling(self, caplog) -> None:
+        with caplog.at_level(logging.WARNING):
+            payload = SlackPayloadBuilder(
+                self._env(INPUT_STATUS="mystery"),
+            ).build_payload()
 
         assert self._color(payload) == "#808080"
         section = self._section_text(payload)
         assert ":grey_question:" in section
         assert "*mystery*" in section
+
+    def test_unknown_status_logs_actionable_warning(self, caplog) -> None:
+        """An unknown status must emit a WARNING the operator can act on.
+
+        Rendering verbatim is graceful degradation, but a Slack card
+        with a grey_question icon is easy to miss.  The WARNING gives
+        the CI-log reader a grep-able, actionable signal that the
+        caller's ``status:`` input doesn't match any mapped value.
+        """
+        with caplog.at_level(logging.WARNING):
+            SlackPayloadBuilder(
+                self._env(INPUT_STATUS="mystery"),
+            ).build_payload()
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "mystery" in message
+        assert "status" in message.lower()
+
+    def test_known_status_does_not_log_a_warning(self, caplog) -> None:
+        """Mapped statuses must not trigger the unknown-status warning."""
+        with caplog.at_level(logging.WARNING):
+            SlackPayloadBuilder(
+                self._env(INPUT_STATUS="success"),
+            ).build_payload()
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == []
 
     def test_custom_message_overrides_status_text(self) -> None:
         payload = SlackPayloadBuilder(

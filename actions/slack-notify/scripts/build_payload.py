@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from typing import Mapping
@@ -48,6 +49,7 @@ class SlackPayloadBuilder:
         ``GH_RUN_ID``, ``GH_WORKFLOW``, ``GH_ACTOR``).
         """
         self._env: Mapping[str, str] = env
+        self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
 
     def build_payload(self) -> dict:
         """Return the Slack webhook payload dict built from the env.
@@ -61,6 +63,18 @@ class SlackPayloadBuilder:
         invoked outside of GitHub Actions.
         """
         status: str = self._env.get("INPUT_STATUS", "")
+        if status not in self.STATUS_MAP:
+            # An unmapped status is almost always a typo or miswiring on
+            # the caller's slack-notify step (or a GitHub-added status we
+            # haven't mapped yet).  Warn so the operator has something
+            # actionable in the CI logs; still emit the notification so
+            # we degrade gracefully instead of going silent.
+            self._logger.warning(
+                "Unknown CI status %r; rendering verbatim with neutral "
+                "styling. Check the 'status:' input on the caller's "
+                "slack-notify step.",
+                status,
+            )
         emoji, color, status_text = self.STATUS_MAP.get(
             status,
             ("grey_question", "#808080", status),
