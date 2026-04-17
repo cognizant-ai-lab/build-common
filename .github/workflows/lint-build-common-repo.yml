@@ -52,7 +52,7 @@ jobs:
     name: Python Quality Gate
     uses: ./.github/workflows/_python-quality-gate.yml
     with:
-      sources: scripts
+      sources: scripts actions
       run-pylint: false
       run-pytest: true
       run-shellcheck: false
