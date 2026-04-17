@@ -70,7 +70,7 @@ runs:
         GH_WORKFLOW: ${{ github.workflow }}
         GH_ACTOR: ${{ github.actor }}
       run: >-
-        "$GITHUB_ACTION_PATH/scripts/build-payload.sh"
+        python3 "$GITHUB_ACTION_PATH/scripts/build_payload.py"
 
     - name: Send Slack notification
       if: >-

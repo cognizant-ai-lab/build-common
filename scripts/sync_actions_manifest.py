@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""sync-actions-manifest.py
+"""sync_actions_manifest.py
 
 Reads actions-manifest.yml and patches every workflow /
 composite-action file so that pinned SHAs and version
 comments match the manifest.
 
 Usage:
-  scripts/sync-actions-manifest.py              # from repo root
-  scripts/sync-actions-manifest.py --check      # exit 1 on drift
+  scripts/sync_actions_manifest.py              # from repo root
+  scripts/sync_actions_manifest.py --check      # exit 1 on drift
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ class ManifestSyncer:
             self._logger.info("")
             self._logger.info(
                 "Manifest drift detected.  "
-                "Run 'scripts/sync-actions-manifest.py' to fix."
+                "Run 'scripts/sync_actions_manifest.py' to fix."
             )
             sys.exit(1)
 

@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""build_payload.py
+
+Builds the Slack webhook payload for the slack-notify
+composite action.
+
+Reads inputs from the environment variables set by
+``actions/slack-notify/action.yml`` and writes a
+``payload=<json>`` multiline entry to ``$GITHUB_OUTPUT`` so
+the downstream ``slackapi/slack-github-action`` step can
+POST it.
+
+Usage:
+  actions/slack-notify/scripts/build_payload.py   # via action.yml
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from typing import Mapping
+
+
+class SlackPayloadBuilder:
+    """Builds the Slack webhook payload from the action's env inputs."""
+
+    # Maps a job-status string to (slack emoji name, attachment color,
+    # human-readable status text).  Unknown statuses fall back to a
+    # neutral grey question mark and render the status verbatim.
+    STATUS_MAP: dict[str, tuple[str, str, str]] = {
+        "success": ("white_check_mark", "good", "Passed"),
+        "failure": ("x", "danger", "Failed"),
+        "cancelled": ("warning", "warning", "Cancelled"),
+    }
+
+    # Heredoc delimiter used when writing the multiline ``payload``
+    # entry to ``$GITHUB_OUTPUT``.  Matches the original bash script
+    # so the contract with the downstream action step stays stable.
+    HEREDOC_DELIMITER: str = "PAYLOAD_EOF"
+
+    def __init__(self, env: Mapping[str, str]) -> None:
+        """Store the env mapping the payload will be built from.
+
+        ``env`` is a mapping of the input environment variables set by
+        ``action.yml`` (``INPUT_STATUS``, ``INPUT_MESSAGE``,
+        ``INPUT_MENTION``, ``GH_REPO``, ``GH_REF``, ``GH_SERVER``,
+        ``GH_RUN_ID``, ``GH_WORKFLOW``, ``GH_ACTOR``).
+        """
+        self._env: Mapping[str, str] = env
+        self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
+
+    def build_payload(self) -> dict:
+        """Return the Slack webhook payload dict built from the env.
+
+        Every environment variable is read through ``Mapping.get`` with
+        an empty-string default so a missing value degrades to an empty
+        rendering rather than raising ``KeyError``.  In practice the
+        variables are all supplied by ``action.yml`` and are therefore
+        always present at runtime; the defaults only matter if the
+        action's input wiring is misconfigured or this module is
+        invoked outside of GitHub Actions.
+        """
+        status: str = self._env.get("INPUT_STATUS", "")
+        if status not in self.STATUS_MAP:
+            # An unmapped status is almost always a typo or miswiring on
+            # the caller's slack-notify step (or a GitHub-added status we
+            # haven't mapped yet).  Warn so the operator has something
+            # actionable in the CI logs; still emit the notification so
+            # we degrade gracefully instead of going silent.
+            self._logger.warning(
+                "Unknown CI status %r; rendering verbatim with neutral "
+                "styling. Check the 'status:' input on the caller's "
+                "slack-notify step.",
+                status,
+            )
+        emoji, color, status_text = self.STATUS_MAP.get(
+            status,
+            ("grey_question", "#808080", status),
+        )
+
+        message: str = self._env.get("INPUT_MESSAGE") or status_text
+
+        mention: str = ""
+        if status == "failure" and self._env.get("INPUT_MENTION") == "true":
+            mention = "<!channel> "
+
+        repo: str = self._env.get("GH_REPO", "")
+        ref: str = self._env.get("GH_REF", "")
+        server: str = self._env.get("GH_SERVER", "")
+        run_id: str = self._env.get("GH_RUN_ID", "")
+        run_url: str = f"{server}/{repo}/actions/runs/{run_id}"
+        workflow: str = self._env.get("GH_WORKFLOW", "")
+        actor: str = self._env.get("GH_ACTOR", "")
+
+        section_text: str = (
+            f"{mention}:{emoji}: *{message}* for "
+            f"`{repo}` on `{ref}`\n"
+            f"<{run_url}|View build run>"
+        )
+        context_text: str = f"Workflow: {workflow} | Triggered by: {actor}"
+
+        return {
+            "attachments": [
+                {
+                    "color": color,
+                    "blocks": [
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": section_text,
+                            },
+                        },
+                        {
+                            "type": "context",
+                            "elements": [
+                                {
+                                    "type": "mrkdwn",
+                                    "text": context_text,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }
+
+    def format_github_output(self, payload: dict) -> str:
+        """Return the ``payload=<json>`` multiline block for GITHUB_OUTPUT.
+
+        Uses the standard ``<<DELIMITER ... DELIMITER`` heredoc form so
+        the serialized JSON can safely contain newlines (``json.dumps``
+        does not produce newlines by default, but the heredoc form
+        matches the original bash implementation and keeps the contract
+        stable).
+        """
+        serialized: str = json.dumps(payload)
+        delimiter: str = self.HEREDOC_DELIMITER
+        return f"payload<<{delimiter}\n{serialized}\n{delimiter}\n"
+
+    def run(self) -> None:
+        """Build the payload and write it to ``$GITHUB_OUTPUT``.
+
+        When ``$GITHUB_OUTPUT`` is unset (e.g. invoked outside of a
+        GitHub Actions runner for local debugging), the payload is
+        emitted as an ``INFO`` log line via ``self._logger`` rather than
+        written to stdout, matching the ``_logger``-everywhere pattern
+        used by the other scripts in this repo.
+        """
+        payload: dict = self.build_payload()
+        line: str = self.format_github_output(payload)
+        github_output: str | None = self._env.get("GITHUB_OUTPUT")
+        if github_output:
+            with open(github_output, "a", encoding="utf-8") as fh:
+                fh.write(line)
+        else:
+            self._logger.info(
+                "GITHUB_OUTPUT not set; payload follows:\n%s",
+                line.rstrip(),
+            )
+
+    @staticmethod
+    def main() -> None:
+        """Entry point."""
+        SlackPayloadBuilder(os.environ).run()
+
+
+if __name__ == "__main__":
+    SlackPayloadBuilder.main()
