@@ -184,15 +184,33 @@ class TestBuildPayload:
 
         assert json.loads(json.dumps(payload)) == payload
 
-    def test_format_github_output_wraps_payload_in_heredoc(self) -> None:
-        builder = SlackPayloadBuilder(self._env(INPUT_STATUS="success"))
-        payload = builder.build_payload()
+    def test_run_writes_heredoc_payload_to_github_output(self, tmp_path) -> None:
+        """End-to-end: ``run()`` writes the heredoc-wrapped JSON payload.
 
-        line = builder.format_github_output(payload)
-        assert line.startswith("payload<<PAYLOAD_EOF\n")
-        assert line.endswith("PAYLOAD_EOF\n")
+        This exercises the contract the action actually relies on --
+        ``main()`` calls ``run()``, which opens the file named by
+        ``$GITHUB_OUTPUT`` in append mode and writes exactly one
+        ``payload<<DELIM ... DELIM`` block containing the JSON-serialized
+        payload.  Testing through ``run()`` (instead of reaching into
+        ``format_github_output`` directly) keeps the test coupled to the
+        public surface; the internal helper can be refactored or
+        inlined without touching the test.
+        """
+        github_output = tmp_path / "github_output"
+        builder = SlackPayloadBuilder(
+            self._env(
+                INPUT_STATUS="success",
+                GITHUB_OUTPUT=str(github_output),
+            ),
+        )
+
+        builder.run()
+
+        contents = github_output.read_text(encoding="utf-8")
+        assert contents.startswith("payload<<PAYLOAD_EOF\n")
+        assert contents.endswith("PAYLOAD_EOF\n")
 
         # The middle line must be a single-line JSON object that
-        # round-trips cleanly.
-        middle = line.split("\n", 1)[1].rsplit("\nPAYLOAD_EOF\n", 1)[0]
-        assert json.loads(middle) == payload
+        # round-trips cleanly and matches what build_payload produces.
+        middle = contents.split("\n", 1)[1].rsplit("\nPAYLOAD_EOF\n", 1)[0]
+        assert json.loads(middle) == builder.build_payload()
