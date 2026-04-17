@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Build the Slack webhook payload for the slack-notify action.
+"""build_payload.py
 
-Reads inputs from the environment variables documented in
-``action.yml`` and writes a ``payload=<json>`` multiline line to
-``$GITHUB_OUTPUT`` so the downstream ``slackapi/slack-github-action``
-step can POST it.
+Builds the Slack webhook payload for the slack-notify
+composite action.
 
-This replaces an earlier bash implementation that shelled out to
-``jq``.  Python's standard library is present in every caller image
-we target (including ``python:*-slim``), whereas ``jq`` is not, so
-this removes a hidden host-level prerequisite for containerized
-callers.  ``json.dumps`` provides the same JSON-escaping guarantee
-that motivated using ``jq --null-input --arg`` originally.
+Reads inputs from the environment variables set by
+``actions/slack-notify/action.yml`` and writes a
+``payload=<json>`` multiline entry to ``$GITHUB_OUTPUT`` so
+the downstream ``slackapi/slack-github-action`` step can
+POST it.
+
+Usage:
+  actions/slack-notify/scripts/build_payload.py   # via action.yml
 """
 
 from __future__ import annotations
