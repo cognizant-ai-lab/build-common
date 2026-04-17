@@ -245,3 +245,23 @@ class TestBuildPayload:
         # round-trips cleanly and matches what build_payload produces.
         middle = contents.split("\n", 1)[1].rsplit("\nPAYLOAD_EOF\n", 1)[0]
         assert json.loads(middle) == builder.build_payload()
+
+    def test_run_logs_payload_when_github_output_unset(self, caplog) -> None:
+        """Local-debug path: with ``$GITHUB_OUTPUT`` unset, the payload
+        is emitted as an ``INFO`` log line on ``self._logger`` rather
+        than written to stdout.  Matches the ``_logger``-everywhere
+        pattern used by the sibling manifest scripts.
+        """
+        env = self._env(INPUT_STATUS="success")
+        env.pop("GITHUB_OUTPUT", None)
+        builder = SlackPayloadBuilder(env)
+
+        with caplog.at_level(logging.INFO):
+            builder.run()
+
+        info_records = [r for r in caplog.records if r.levelname == "INFO"]
+        assert len(info_records) == 1
+        message = info_records[0].getMessage()
+        assert "GITHUB_OUTPUT" in message
+        assert "payload<<PAYLOAD_EOF" in message
+        assert "PAYLOAD_EOF" in message.rsplit("\n", 1)[-1]

@@ -19,7 +19,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
 from typing import Mapping
 
 
@@ -143,9 +142,11 @@ class SlackPayloadBuilder:
     def run(self) -> None:
         """Build the payload and write it to ``$GITHUB_OUTPUT``.
 
-        Falls back to ``stdout`` when ``GITHUB_OUTPUT`` is unset (e.g.
-        when invoked outside of a GitHub Actions runner for local
-        debugging).
+        When ``$GITHUB_OUTPUT`` is unset (e.g. invoked outside of a
+        GitHub Actions runner for local debugging), the payload is
+        emitted as an ``INFO`` log line via ``self._logger`` rather than
+        written to stdout, matching the ``_logger``-everywhere pattern
+        used by the other scripts in this repo.
         """
         payload: dict = self.build_payload()
         line: str = self.format_github_output(payload)
@@ -154,7 +155,10 @@ class SlackPayloadBuilder:
             with open(github_output, "a", encoding="utf-8") as fh:
                 fh.write(line)
         else:
-            sys.stdout.write(line)
+            self._logger.info(
+                "GITHUB_OUTPUT not set; payload follows:\n%s",
+                line.rstrip(),
+            )
 
     @staticmethod
     def main() -> None:
