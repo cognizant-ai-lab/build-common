@@ -36,22 +36,66 @@ class TestBuildPayload:
         return env
 
     @staticmethod
-    def _section_text(payload: dict) -> str:
-        """Return the markdown text of the payload's section block."""
-        return payload["attachments"][0]["blocks"][0]["text"]["text"]
+    def _dig(obj: object, *path: object) -> object:
+        """Walk a nested dict/list path without using ``[]`` on dicts.
 
-    @staticmethod
-    def _context_text(payload: dict) -> str:
+        String ``path`` elements are looked up as dict keys via
+        ``Mapping.get`` (per the repo's hard rule against ``[]`` dict
+        access); integer elements are used as list indices.  Returns
+        ``None`` as soon as any step is missing, so assertions that
+        expect a specific value will fail with a clear
+        ``AssertionError`` instead of a structure-dependent
+        ``KeyError``/``IndexError``.
+        """
+        for step in path:
+            if obj is None:
+                return None
+            if isinstance(step, str) and isinstance(obj, dict):
+                obj = obj.get(step)
+            elif isinstance(step, int) and isinstance(obj, list):
+                obj = obj[step] if 0 <= step < len(obj) else None
+            else:
+                return None
+        return obj
+
+    @classmethod
+    def _section_text(cls, payload: dict) -> object:
+        """Return the markdown text of the payload's section block."""
+        return cls._dig(
+            payload,
+            "attachments",
+            0,
+            "blocks",
+            0,
+            "text",
+            "text",
+        )
+
+    @classmethod
+    def _context_text(cls, payload: dict) -> object:
         """Return the markdown text of the payload's context block."""
-        return payload["attachments"][0]["blocks"][1]["elements"][0]["text"]
+        return cls._dig(
+            payload,
+            "attachments",
+            0,
+            "blocks",
+            1,
+            "elements",
+            0,
+            "text",
+        )
+
+    @classmethod
+    def _color(cls, payload: dict) -> object:
+        """Return the attachment color for the payload."""
+        return cls._dig(payload, "attachments", 0, "color")
 
     def test_success_payload_shape(self) -> None:
         payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success"),
         ).build_payload()
 
-        attachment = payload["attachments"][0]
-        assert attachment["color"] == "good"
+        assert self._color(payload) == "good"
 
         section = self._section_text(payload)
         assert ":white_check_mark:" in section
@@ -72,7 +116,7 @@ class TestBuildPayload:
             self._env(INPUT_STATUS="failure", INPUT_MENTION="true"),
         ).build_payload()
 
-        assert payload["attachments"][0]["color"] == "danger"
+        assert self._color(payload) == "danger"
         section = self._section_text(payload)
         assert section.startswith("<!channel> :x:")
         assert "*Failed*" in section
@@ -91,7 +135,7 @@ class TestBuildPayload:
             self._env(INPUT_STATUS="cancelled"),
         ).build_payload()
 
-        assert payload["attachments"][0]["color"] == "warning"
+        assert self._color(payload) == "warning"
         section = self._section_text(payload)
         assert ":warning:" in section
         assert "*Cancelled*" in section
@@ -101,7 +145,7 @@ class TestBuildPayload:
             self._env(INPUT_STATUS="mystery"),
         ).build_payload()
 
-        assert payload["attachments"][0]["color"] == "#808080"
+        assert self._color(payload) == "#808080"
         section = self._section_text(payload)
         assert ":grey_question:" in section
         assert "*mystery*" in section

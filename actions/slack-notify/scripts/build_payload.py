@@ -50,8 +50,17 @@ class SlackPayloadBuilder:
         self._env: Mapping[str, str] = env
 
     def build_payload(self) -> dict:
-        """Return the Slack webhook payload dict built from the env."""
-        status: str = self._env["INPUT_STATUS"]
+        """Return the Slack webhook payload dict built from the env.
+
+        Every environment variable is read through ``Mapping.get`` with
+        an empty-string default so a missing value degrades to an empty
+        rendering rather than raising ``KeyError``.  In practice the
+        variables are all supplied by ``action.yml`` and are therefore
+        always present at runtime; the defaults only matter if the
+        action's input wiring is misconfigured or this module is
+        invoked outside of GitHub Actions.
+        """
+        status: str = self._env.get("INPUT_STATUS", "")
         emoji, color, status_text = self.STATUS_MAP.get(
             status,
             ("grey_question", "#808080", status),
@@ -63,13 +72,13 @@ class SlackPayloadBuilder:
         if status == "failure" and self._env.get("INPUT_MENTION") == "true":
             mention = "<!channel> "
 
-        repo: str = self._env["GH_REPO"]
-        ref: str = self._env["GH_REF"]
-        run_url: str = (
-            f"{self._env['GH_SERVER']}/{repo}/actions/runs/{self._env['GH_RUN_ID']}"
-        )
-        workflow: str = self._env["GH_WORKFLOW"]
-        actor: str = self._env["GH_ACTOR"]
+        repo: str = self._env.get("GH_REPO", "")
+        ref: str = self._env.get("GH_REF", "")
+        server: str = self._env.get("GH_SERVER", "")
+        run_id: str = self._env.get("GH_RUN_ID", "")
+        run_url: str = f"{server}/{repo}/actions/runs/{run_id}"
+        workflow: str = self._env.get("GH_WORKFLOW", "")
+        actor: str = self._env.get("GH_ACTOR", "")
 
         section_text: str = (
             f"{mention}:{emoji}: *{message}* for "
