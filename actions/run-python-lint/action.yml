@@ -71,7 +71,11 @@ runs:
       if: ${{ inputs.toolchain == 'legacy' }}
       working-directory: ${{ inputs.working-directory }}
       shell: bash
-      run: flake8
+      # Exclude the build-common checkout path so callers do
+      # not lint the reusable-workflow's own tree.  Uses
+      # --extend-exclude so repos that already set
+      # exclude = ... in .flake8/setup.cfg keep those entries.
+      run: flake8 --extend-exclude=.build-common
 
     - name: 'Legacy: black --check'
       if: >-
