@@ -1,0 +1,4 @@
+[flake8]
+# Match ruff's default line length so the legacy toolchain
+# self-lint agrees with the ruff toolchain self-lint.
+max-line-length = 88
