@@ -48,13 +48,30 @@ jobs:
             .github/workflows/*.yml
 
 
-  python-quality-gate:
-    name: Python Quality Gate
+  python-quality-gate-ruff:
+    name: Python Quality Gate (ruff)
     uses: ./.github/workflows/_python-quality-gate.yml
     with:
+      lint-toolchain: ruff
       sources: scripts actions
       run-pylint: false
       run-pytest: true
+      run-shellcheck: false
+      enable-slack: false
+      build-common-ref: ${{ github.head_ref || github.ref_name }}
+
+  # Lint a second time with the legacy toolchain (flake8) so
+  # we catch anything flake8 flags that ruff does not (e.g.
+  # W391 trailing blank line).  Consumers still picking the
+  # legacy toolchain should see the same lint surface here.
+  python-quality-gate-legacy:
+    name: Python Quality Gate (legacy)
+    uses: ./.github/workflows/_python-quality-gate.yml
+    with:
+      lint-toolchain: legacy
+      sources: scripts actions
+      run-pylint: false
+      run-pytest: false
       run-shellcheck: false
       enable-slack: false
       build-common-ref: ${{ github.head_ref || github.ref_name }}
