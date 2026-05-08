@@ -67,8 +67,8 @@ runs:
         }}
       shell: bash
       env:
-        INPUT_DETAILS: ${{ inputs.details }}
         INPUT_STATUS: ${{ inputs.status }}
+        INPUT_DETAILS: ${{ inputs.details }}
         INPUT_MESSAGE: ${{ inputs.message }}
         INPUT_MENTION: ${{ inputs.mention-on-failure }}
         GH_REPO: ${{ github.repository }}

@@ -101,6 +101,9 @@ class SlackPayloadBuilder:
         )
         context_text: str = f"Workflow: {workflow} | Triggered by: {actor}"
 
+        # Block order is contract: heading -> optional details -> context.
+        # Slack renders blocks top-to-bottom; reordering breaks the
+        # rendering documented in action.yml's `details:` description.
         blocks: list[dict] = [
             {
                 "type": "section",
