@@ -190,6 +190,60 @@ class TestBuildPayload:
         assert "*All green*" in section
         assert "*Passed*" not in section
 
+    def test_payload_includes_details_block_when_set(self) -> None:
+        payload = SlackPayloadBuilder(
+            self._env(
+                INPUT_STATUS="success",
+                INPUT_DETAILS="7 passed in 30s",
+            ),
+        ).build_payload()
+
+        blocks = self._dig(payload, "attachments", 0, "blocks")
+        assert isinstance(blocks, list)
+        assert len(blocks) == 3
+        assert self._dig(blocks, 1, "type") == "section"
+        assert self._dig(blocks, 1, "text", "text") == "7 passed in 30s"
+        assert self._dig(blocks, 2, "type") == "context"
+
+    def test_payload_omits_details_block_when_unset(self) -> None:
+        payload = SlackPayloadBuilder(
+            self._env(INPUT_STATUS="success"),
+        ).build_payload()
+
+        blocks = self._dig(payload, "attachments", 0, "blocks")
+        assert isinstance(blocks, list)
+        assert len(blocks) == 2
+        assert self._dig(blocks, 0, "type") == "section"
+        assert self._dig(blocks, 1, "type") == "context"
+
+    def test_payload_preserves_multiline_details_verbatim(self) -> None:
+        """Multi-line details survive the JSON round-trip unchanged.
+
+        ``action.yml`` advertises ``Multi-line is allowed`` for the
+        ``details:`` input; this test locks down that contract so a
+        future refactor can't silently flatten newlines or escape them
+        beyond what JSON requires.
+        """
+        multiline = "line one\nline two\nline three"
+        payload = SlackPayloadBuilder(
+            self._env(
+                INPUT_STATUS="success",
+                INPUT_DETAILS=multiline,
+            ),
+        ).build_payload()
+
+        details_text = self._dig(
+            payload,
+            "attachments",
+            0,
+            "blocks",
+            1,
+            "text",
+            "text",
+        )
+        assert details_text == multiline
+        assert json.loads(json.dumps(payload)) == payload
+
     def test_mention_is_ignored_on_success(self) -> None:
         payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success", INPUT_MENTION="true"),

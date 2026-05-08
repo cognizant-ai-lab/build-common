@@ -12,6 +12,13 @@ inputs:
     description: >-
       Job status (success, failure, cancelled)
     required: true
+  details:
+    description: >-
+      Optional extra block of mrkdwn text rendered as a
+      separate section below the status heading
+      (e.g. a pytest summary line). Multi-line is allowed.
+    required: false
+    default: ''
   message:
     description: >-
       Custom message to include in notification
@@ -61,6 +68,7 @@ runs:
       shell: bash
       env:
         INPUT_STATUS: ${{ inputs.status }}
+        INPUT_DETAILS: ${{ inputs.details }}
         INPUT_MESSAGE: ${{ inputs.message }}
         INPUT_MENTION: ${{ inputs.mention-on-failure }}
         GH_REPO: ${{ github.repository }}
