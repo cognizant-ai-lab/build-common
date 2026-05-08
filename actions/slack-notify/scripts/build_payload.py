@@ -108,14 +108,18 @@ class SlackPayloadBuilder:
             },
         ]
         if details:
-            blocks.append({
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": details},
-            })
-        blocks.append({
-            "type": "context",
-            "elements": [{"type": "mrkdwn", "text": context_text}],
-        })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": details},
+                }
+            )
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": context_text}],
+            }
+        )
 
         return {
             "attachments": [
