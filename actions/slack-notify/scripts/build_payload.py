@@ -44,8 +44,8 @@ class SlackPayloadBuilder:
 
         ``env`` is a mapping of the input environment variables set by
         ``action.yml`` (``INPUT_STATUS``, ``INPUT_MESSAGE``,
-        ``INPUT_MENTION``, ``GH_REPO``, ``GH_REF``, ``GH_SERVER``,
-        ``GH_RUN_ID``, ``GH_WORKFLOW``, ``GH_ACTOR``).
+        ``INPUT_MENTION``, ``INPUT_DETAILS``, ``GH_REPO``, ``GH_REF``,
+        ``GH_SERVER``, ``GH_RUN_ID``, ``GH_WORKFLOW``, ``GH_ACTOR``).
         """
         self._env: Mapping[str, str] = env
         self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
@@ -92,6 +92,7 @@ class SlackPayloadBuilder:
         run_url: str = f"{server}/{repo}/actions/runs/{run_id}"
         workflow: str = self._env.get("GH_WORKFLOW", "")
         actor: str = self._env.get("GH_ACTOR", "")
+        details: str = self._env.get("INPUT_DETAILS", "")
 
         section_text: str = (
             f"{mention}:{emoji}: *{message}* for "
@@ -100,28 +101,27 @@ class SlackPayloadBuilder:
         )
         context_text: str = f"Workflow: {workflow} | Triggered by: {actor}"
 
+        blocks: list[dict] = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": section_text},
+            },
+        ]
+        if details:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": details},
+            })
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": context_text}],
+        })
+
         return {
             "attachments": [
                 {
                     "color": color,
-                    "blocks": [
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": section_text,
-                            },
-                        },
-                        {
-                            "type": "context",
-                            "elements": [
-                                {
-                                    "type": "mrkdwn",
-                                    "text": context_text,
-                                },
-                            ],
-                        },
-                    ],
+                    "blocks": blocks,
                 },
             ],
         }

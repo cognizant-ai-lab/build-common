@@ -190,6 +190,32 @@ class TestBuildPayload:
         assert "*All green*" in section
         assert "*Passed*" not in section
 
+    def test_payload_includes_details_block_when_set(self) -> None:
+        payload = SlackPayloadBuilder(
+            self._env(
+                INPUT_STATUS="success",
+                INPUT_DETAILS="7 passed in 30s",
+            ),
+        ).build_payload()
+
+        blocks = self._dig(payload, "attachments", 0, "blocks")
+        assert isinstance(blocks, list)
+        assert len(blocks) == 3
+        assert self._dig(blocks, 1, "type") == "section"
+        assert self._dig(blocks, 1, "text", "text") == "7 passed in 30s"
+        assert self._dig(blocks, 2, "type") == "context"
+
+    def test_payload_omits_details_block_when_unset(self) -> None:
+        payload = SlackPayloadBuilder(
+            self._env(INPUT_STATUS="success"),
+        ).build_payload()
+
+        blocks = self._dig(payload, "attachments", 0, "blocks")
+        assert isinstance(blocks, list)
+        assert len(blocks) == 2
+        assert self._dig(blocks, 0, "type") == "section"
+        assert self._dig(blocks, 1, "type") == "context"
+
     def test_mention_is_ignored_on_success(self) -> None:
         payload = SlackPayloadBuilder(
             self._env(INPUT_STATUS="success", INPUT_MENTION="true"),
