@@ -1,0 +1,30 @@
+---
+# Composed by quality-gate workflows -- see
+# .github/workflows/ for the callers.
+name: 'Run Hadolint'
+description: >-
+  Lint Dockerfiles with hadolint.  Can be composed
+  into any quality-gate workflow (Python or Node).
+author: 'Cognizant AI Lab'
+
+inputs:
+  dockerfile:
+    description: 'Path to Dockerfile'
+    required: false
+    default: 'Dockerfile'
+  failure-threshold:
+    description: >-
+      Rule severity threshold for pipeline failure.
+      One of: error, warning, info, style, ignore, none
+    required: false
+    default: 'info'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run hadolint
+      # v3.3.0
+      uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5
+      with:
+        dockerfile: ${{ inputs.dockerfile }}
+        failure-threshold: ${{ inputs.failure-threshold }}

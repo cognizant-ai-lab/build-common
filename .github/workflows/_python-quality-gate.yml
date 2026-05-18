@@ -91,6 +91,25 @@ name: Python Quality Gate
         default: ''
         type: string
 
+      run-hadolint:
+        description: 'Run hadolint on Dockerfile'
+        required: false
+        default: false
+        type: boolean
+      dockerfile-path:
+        description: 'Path to Dockerfile for hadolint'
+        required: false
+        default: 'Dockerfile'
+        type: string
+      hadolint-failure-threshold:
+        description: >-
+          Rule severity threshold for hadolint pipeline
+          failure (error, warning, info, style, ignore,
+          none)
+        required: false
+        default: 'info'
+        type: string
+
       run-markdownlint:
         description: 'Run pymarkdownlint on markdown files'
         required: false
@@ -333,6 +352,18 @@ jobs:
             pymarkdown --config ./.pymarkdownlint.yaml \
               scan ./docs ./README.md
           fi
+
+      # ── Shared: hadolint ──────────────────────────────
+      - name: Run hadolint
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-hadolint
+          }}
+        uses: ./.build-common/actions/run-hadolint
+        with:
+          dockerfile: ${{ inputs.dockerfile-path }}
+          failure-threshold: ${{ inputs.hadolint-failure-threshold }}
 
       # ── Test ──────────────────────────────────────────
       - name: Run test command override

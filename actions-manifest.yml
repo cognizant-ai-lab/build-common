@@ -68,6 +68,13 @@ actions:
     used_in:
       - actions/docker-buildx-push/action.yml
 
+  - action: hadolint/hadolint-action
+    version: v3.3.0
+    sha: 2332a7b74a6de0dda2e2221d575162eba76ba5e5
+    node: node24
+    used_in:
+      - actions/run-hadolint/action.yml
+
   - action: Checkmarx/ast-github-action
     version: "2.3.33"
     sha: c52fa63dbd4916520882e10456d66ff4dd7bf754
