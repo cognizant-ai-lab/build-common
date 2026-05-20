@@ -210,6 +210,8 @@ jobs:
       - name: Checkout
         # v6.0.2
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
 
       # Checkout build-common so reusable-workflow steps can
       # call shared composite actions and scripts
@@ -223,6 +225,7 @@ jobs:
           repository: cognizant-ai-lab/build-common
           ref: ${{ inputs.build-common-ref }}
           path: .build-common
+          persist-credentials: false
           sparse-checkout: |
             scripts
             actions
