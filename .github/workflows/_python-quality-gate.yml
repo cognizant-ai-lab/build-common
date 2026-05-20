@@ -110,6 +110,14 @@ name: Python Quality Gate
         default: 'info'
         type: string
 
+      run-zizmor:
+        description: >-
+          Run zizmor security analysis on GitHub Actions
+          workflow files
+        required: false
+        default: false
+        type: boolean
+
       run-markdownlint:
         description: 'Run pymarkdownlint on markdown files'
         required: false
@@ -364,6 +372,15 @@ jobs:
         with:
           dockerfile: ${{ inputs.dockerfile-path }}
           failure-threshold: ${{ inputs.hadolint-failure-threshold }}
+
+      # ── Shared: zizmor ─────────────────────────────────
+      - name: Run zizmor
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-zizmor
+          }}
+        uses: ./.build-common/actions/run-zizmor
 
       # ── Test ──────────────────────────────────────────
       - name: Run test command override
