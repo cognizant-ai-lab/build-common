@@ -75,6 +75,13 @@ actions:
     used_in:
       - actions/run-hadolint/action.yml
 
+  - action: zizmorcore/zizmor-action
+    version: v0.5.6
+    sha: 5f14fd08f7cf1cb1609c1e344975f152c7ee938d
+    node: composite
+    used_in:
+      - actions/run-zizmor/action.yml
+
   - action: Checkmarx/ast-github-action
     version: "2.3.33"
     sha: c52fa63dbd4916520882e10456d66ff4dd7bf754

@@ -110,6 +110,14 @@ name: Python Quality Gate
         default: 'info'
         type: string
 
+      run-zizmor:
+        description: >-
+          Run zizmor security analysis on GitHub Actions
+          workflow files
+        required: false
+        default: false
+        type: boolean
+
       run-markdownlint:
         description: 'Run pymarkdownlint on markdown files'
         required: false
@@ -202,6 +210,8 @@ jobs:
       - name: Checkout
         # v6.0.2
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
 
       # Checkout build-common so reusable-workflow steps can
       # call shared composite actions and scripts
@@ -215,6 +225,7 @@ jobs:
           repository: cognizant-ai-lab/build-common
           ref: ${{ inputs.build-common-ref }}
           path: .build-common
+          persist-credentials: false
           sparse-checkout: |
             scripts
             actions
@@ -364,6 +375,15 @@ jobs:
         with:
           dockerfile: ${{ inputs.dockerfile-path }}
           failure-threshold: ${{ inputs.hadolint-failure-threshold }}
+
+      # ── Shared: zizmor ─────────────────────────────────
+      - name: Run zizmor
+        if: >-
+          ${{
+            inputs.lint-command-override == '' &&
+            inputs.run-zizmor
+          }}
+        uses: ./.build-common/actions/run-zizmor
 
       # ── Test ──────────────────────────────────────────
       - name: Run test command override

@@ -17,6 +17,8 @@ jobs:
     steps:
       # v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
 
       - name: Install yamllint
         shell: bash
@@ -47,6 +49,18 @@ jobs:
           actionlint -color \
             .github/workflows/*.yml
 
+
+  zizmor:
+    name: Security lint GitHub Actions (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: ./actions/run-zizmor
 
   python-quality-gate-ruff:
     name: Python Quality Gate (ruff)
@@ -82,6 +96,8 @@ jobs:
     steps:
       # v6.0.2
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
 
       - name: Install dependencies
         shell: bash
