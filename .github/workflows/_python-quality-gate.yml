@@ -365,24 +365,22 @@ jobs:
           fi
 
       # ── Shared: hadolint ──────────────────────────────
+      # Hadolint lints Dockerfiles, which is orthogonal to
+      # Python lint.  Run it regardless of whether the
+      # caller uses lint-command-override.
       - name: Run hadolint
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.run-hadolint
-          }}
+        if: ${{ inputs.run-hadolint }}
         uses: ./.build-common/actions/run-hadolint
         with:
           dockerfile: ${{ inputs.dockerfile-path }}
           failure-threshold: ${{ inputs.hadolint-failure-threshold }}
 
       # ── Shared: zizmor ─────────────────────────────────
+      # Zizmor scans GitHub Actions workflows, which is
+      # orthogonal to Python lint.  Run it regardless of
+      # whether the caller uses lint-command-override.
       - name: Run zizmor
-        if: >-
-          ${{
-            inputs.lint-command-override == '' &&
-            inputs.run-zizmor
-          }}
+        if: ${{ inputs.run-zizmor }}
         uses: ./.build-common/actions/run-zizmor
 
       # ── Test ──────────────────────────────────────────
