@@ -12,6 +12,10 @@ inputs:
     description: 'Path to Dockerfile'
     required: false
     default: 'Dockerfile'
+  recursive:
+    description: 'Search for Dockerfiles recursively from the project root'
+    required: false
+    default: 'false'
   failure-threshold:
     description: >-
       Rule severity threshold for pipeline failure.
@@ -27,4 +31,5 @@ runs:
       uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5
       with:
         dockerfile: ${{ inputs.dockerfile }}
+        recursive: ${{ inputs.recursive }}
         failure-threshold: ${{ inputs.failure-threshold }}
