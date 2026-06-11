@@ -82,6 +82,20 @@ actions:
     used_in:
       - actions/run-zizmor/action.yml
 
+  - action: actions/upload-artifact
+    version: v7.0.1
+    sha: 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    node: node24
+    used_in:
+      - cognizant-ai-lab/neuro-san/.github/workflows/checkmarx.yml
+
+  - action: actions/download-artifact
+    version: v4.3.0
+    sha: d3f86a106a0bac45b974a628896c90dbdf5c8093
+    node: node24
+    used_in:
+      - cognizant-ai-lab/neuro-san/.github/workflows/checkmarx.yml
+
   - action: Checkmarx/ast-github-action
     version: "2.3.33"
     sha: c52fa63dbd4916520882e10456d66ff4dd7bf754
