@@ -86,15 +86,13 @@ actions:
     version: v7.0.1
     sha: 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     node: node24
-    used_in:
-      - cognizant-ai-lab/neuro-san/.github/workflows/checkmarx.yml
+    used_in: []  # downstream: neuro-san, neuro-san-ui, neuro-san-studio
 
   - action: actions/download-artifact
     version: v4.3.0
     sha: d3f86a106a0bac45b974a628896c90dbdf5c8093
     node: node24
-    used_in:
-      - cognizant-ai-lab/neuro-san/.github/workflows/checkmarx.yml
+    used_in: []  # downstream: neuro-san
 
   - action: Checkmarx/ast-github-action
     version: "2.3.33"
