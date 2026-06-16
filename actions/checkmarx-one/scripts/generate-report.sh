@@ -35,7 +35,7 @@ AUTH_RESPONSE="$(curl --silent --show-error \
   "${IAM_URI}/auth/realms/${CX_TENANT}/protocol/openid-connect/token")"
 
 TOKEN="$(echo "$AUTH_RESPONSE" \
-  | jq --raw-output '.access_token')"
+  | jq --raw-output '.access_token' 2>/dev/null || true)"
 if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
   echo "::error::Failed to authenticate." \
     "Response: ${AUTH_RESPONSE}"
@@ -48,10 +48,11 @@ SCAN_RESPONSE="$(curl --silent --show-error \
   --header "Authorization: Bearer ${TOKEN}" \
   "${API_BASE}/api/scans/${SCAN_ID}")"
 echo "Scan response: ${SCAN_RESPONSE}" \
-  | head --lines=1 | head --bytes=500
+  | head --lines=1 | head --bytes=500 || true
 
 PROJECT_ID="$(echo "$SCAN_RESPONSE" \
-  | jq --raw-output '.projectId // .projectID // empty')"
+  | jq --raw-output '.projectId // .projectID // empty' \
+  2>/dev/null || true)"
 if [[ -z "$PROJECT_ID" ]]; then
   echo "::warning::Could not extract projectId from scan"
 else
