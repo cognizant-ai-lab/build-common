@@ -1,0 +1,167 @@
+---
+name: Checkmarx One
+
+"on":
+  workflow_call:
+    inputs:
+      base-uri:
+        description: 'Checkmarx One portal URL'
+        required: true
+        type: string
+      cx-tenant:
+        description: 'Checkmarx One tenant name'
+        required: true
+        type: string
+      cx-client-id:
+        description: >-
+          OAuth client ID for Checkmarx One authentication
+        required: true
+        type: string
+      cx-iam-uri:
+        description: >-
+          Checkmarx One IAM URI.  When empty, derived from
+          base-uri by replacing ast.checkmarx with
+          iam.checkmarx.
+        required: false
+        default: ''
+        type: string
+      scan-params:
+        description: >-
+          Additional CLI parameters for the scan command
+          (e.g. --sast-preset-name "Checkmarx Default"
+          --threshold "sast-critical=1;sast-high=1")
+        required: false
+        default: ''
+        type: string
+      report-retention-days:
+        description: >-
+          Number of days to retain the report artifact
+        required: false
+        default: 90
+        type: number
+      attach-to-release:
+        description: >-
+          Attach the Checkmarx report PDF to the GitHub
+          release when triggered by a release event
+        required: false
+        default: true
+        type: boolean
+      enable-slack:
+        description: 'Send Slack notifications on completion'
+        required: false
+        default: true
+        type: boolean
+      build-common-ref:
+        description: >-
+          Git ref of build-common to use for shared actions.
+          Defaults to "main"; override when testing a
+          build-common PR.
+        required: false
+        default: 'main'
+        type: string
+
+    secrets:
+      CX_CLIENT_SECRET:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: false
+
+jobs:
+  checkmarx-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout build-common
+        # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: cognizant-ai-lab/build-common
+          ref: ${{ inputs.build-common-ref }}
+          path: .build-common
+          persist-credentials: false
+          sparse-checkout: |
+            actions
+
+      - name: Run Checkmarx One scan
+        id: scan
+        uses: ./.build-common/actions/checkmarx-one
+        with:
+          base-uri: ${{ inputs.base-uri }}
+          cx-tenant: ${{ inputs.cx-tenant }}
+          cx-client-id: ${{ inputs.cx-client-id }}
+          cx-client-secret: ${{ secrets.CX_CLIENT_SECRET }}
+          scan-params: ${{ inputs.scan-params }}
+
+      - name: Generate and download report
+        id: report
+        if: always() && steps.scan.outputs.scan-id != ''
+        env:
+          CX_BASE_URI: ${{ inputs.base-uri }}
+          CX_IAM_URI: ${{ inputs.cx-iam-uri }}
+          CX_TENANT: ${{ inputs.cx-tenant }}
+          CX_CLIENT_ID: ${{ inputs.cx-client-id }}
+          CX_CLIENT_SECRET: ${{ secrets.CX_CLIENT_SECRET }}
+          SCAN_ID: ${{ steps.scan.outputs.scan-id }}
+        shell: bash
+        run: |
+          .build-common/actions/checkmarx-one/scripts/generate-report.sh
+
+      - name: Upload Checkmarx report
+        if: always() && steps.report.outcome == 'success'
+        # v7.0.1
+        # yamllint disable-line rule:line-length
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+          path: checkmarx-report.pdf
+          retention-days: ${{ inputs.report-retention-days }}
+
+      - name: Notify Slack
+        if: >-
+          ${{
+            !cancelled() &&
+            inputs.enable-slack
+          }}
+        uses: ./.build-common/actions/slack-notify
+        with:
+          status: ${{ job.status }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  attach-to-release:
+    if: >-
+      ${{
+        always() &&
+        inputs.attach-to-release &&
+        github.event_name == 'release'
+      }}
+    needs: checkmarx-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download report artifact
+        # v4.3.0
+        # yamllint disable-line rule:line-length
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: checkmarx-report-${{ github.run_id }}
+
+      - name: Attach report to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          gh release upload "$TAG_NAME" \
+            checkmarx-report.pdf#checkmarx-sast-report.pdf \
+            --repo "${{ github.repository }}" \
+            --clobber
