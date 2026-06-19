@@ -1,7 +1,7 @@
 ---
 name: Lint build-common repo
 
-"on":
+on:
   push:
     branches: [main]
   pull_request:

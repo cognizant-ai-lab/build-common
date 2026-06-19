@@ -1,7 +1,7 @@
 ---
 name: Checkmarx One
 
-"on":
+on:
   workflow_call:
     inputs:
       base-uri:
