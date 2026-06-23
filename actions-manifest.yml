@@ -24,6 +24,7 @@ actions:
     node: node24
     used_in:
       - .github/workflows/_checkmarx.yml
+      - .github/workflows/_publish-pypi.yml
       - .github/workflows/_python-quality-gate.yml
       - .github/workflows/lint-build-common-repo.yml
 
@@ -103,6 +104,13 @@ actions:
     node: docker
     used_in:
       - actions/checkmarx-one/action.yml
+
+  - action: pypa/gh-action-pypi-publish
+    version: v1.14.0
+    sha: cef221092ed1bacb1cc03d23a2d87d1d172e277b
+    node: composite
+    used_in:
+      - .github/workflows/_publish-pypi.yml
 
   - action: slackapi/slack-github-action
     version: v3.0.1
