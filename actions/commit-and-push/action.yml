@@ -1,0 +1,43 @@
+---
+name: Commit and push
+
+description: >-
+  Stage a file, commit, pull/rebase, and push to the default branch.
+  Wraps EndBug/add-and-commit with the org's pinned SHA and the
+  --rebase --autostash pull strategy.
+
+inputs:
+  file_path:
+    description: File to stage and commit
+    required: true
+  commit_message:
+    description: Commit message
+    required: true
+  author_name:
+    description: Git author name
+    required: false
+    default: GitHub Actions
+  author_email:
+    description: Git author email
+    required: false
+    default: actions@github.com
+  github_token:
+    description: Token for GitHub API calls
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Commit and push changes
+      # v9.1.4
+      # yamllint disable-line rule:line-length
+      uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5
+      with:
+        add: ${{ inputs.file_path }}
+        message: ${{ inputs.commit_message }}
+        author_name: ${{ inputs.author_name }}
+        author_email: ${{ inputs.author_email }}
+        pull: --rebase --autostash
+        push: true
+        github_token: ${{ inputs.github_token }}
