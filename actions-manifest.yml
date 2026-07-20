@@ -118,3 +118,10 @@ actions:
     node: node24
     used_in:
       - actions/slack-notify/action.yml
+
+  - action: EndBug/add-and-commit
+    version: v9.1.4
+    sha: a94899bca583c204427a224a7af87c02f9b325d5
+    node: node20
+    used_in:
+      - actions/commit-and-push/action.yml
