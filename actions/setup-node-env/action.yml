@@ -8,9 +8,17 @@ author: 'Cognizant AI Lab'
 
 inputs:
   node-version:
-    description: 'Node.js version to use'
+    description: >-
+      Node.js version to use. If omitted, node-version-file is used.
     required: false
-    default: '22'
+    default: ''
+  node-version-file:
+    description: >-
+      File containing the Node.js version to use when node-version is
+      omitted. Defaults to package.json, which actions/setup-node reads
+      from engines.node.
+    required: false
+    default: 'package.json'
   working-directory:
     description: 'Working directory for installing dependencies'
     required: false
@@ -40,6 +48,9 @@ outputs:
   node-version:
     description: 'Installed Node.js version'
     value: ${{ steps.setup-node.outputs.node-version }}
+  nodejs-major-version:
+    description: 'Major Node.js version (e.g. 26)'
+    value: ${{ steps.set-outputs.outputs.nodejs_major_version }}
   cache-hit:
     description: 'Whether the cache was hit'
     value: ${{ steps.setup-node.outputs.cache-hit }}
@@ -60,10 +71,23 @@ runs:
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
       with:
         node-version: ${{ inputs.node-version }}
+        node-version-file: >-
+          ${{
+            inputs.node-version == ''
+            && inputs.node-version-file
+            || ''
+          }}
         cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
         cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
         registry-url: ${{ inputs.registry-url }}
         scope: ${{ inputs.scope }}
+
+    - name: Set Node.js major version output
+      id: set-outputs
+      shell: bash
+      run: |
+        NODEJS_MAJOR=$(node --version | sed 's/^v//; s/\..*//')
+        echo "nodejs_major_version=$NODEJS_MAJOR" >> $GITHUB_OUTPUT
 
     - name: Clean install (if requested)
       if: ${{ inputs.clean-install == 'true' }}
