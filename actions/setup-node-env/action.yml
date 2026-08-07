@@ -65,18 +65,24 @@ runs:
       run: >-
         "${{ github.action_path }}/scripts/enable-corepack.sh"
 
+    - name: Resolve node version file path
+      id: resolve
+      if: ${{ inputs.node-version == '' }}
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        VERSION_FILE: ${{ inputs.node-version-file }}
+      run: |
+        NODE_VERSION_FILE="${WORKING_DIR}/${VERSION_FILE}"
+        echo "node_version_file=${NODE_VERSION_FILE}" >> "${GITHUB_OUTPUT}"
+
     - name: Setup Node.js ${{ inputs.node-version }}
       id: setup-node
       # v6.3.0
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
       with:
         node-version: ${{ inputs.node-version }}
-        node-version-file: >-
-          ${{
-            inputs.node-version == ''
-            && inputs.node-version-file
-            || ''
-          }}
+        node-version-file: ${{ steps.resolve.outputs.node_version_file }}
         cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
         cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
         registry-url: ${{ inputs.registry-url }}
