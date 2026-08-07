@@ -7,10 +7,6 @@ description: >-
 author: 'Cognizant AI Lab'
 
 inputs:
-  node-version:
-    description: 'Node.js version to use'
-    required: false
-    default: '22'
   working-directory:
     description: 'Working directory for installing dependencies'
     required: false
@@ -40,6 +36,9 @@ outputs:
   node-version:
     description: 'Installed Node.js version'
     value: ${{ steps.setup-node.outputs.node-version }}
+  nodejs-major-version:
+    description: 'Major Node.js version (e.g. 26)'
+    value: ${{ steps.set-outputs.outputs.nodejs_major_version }}
   cache-hit:
     description: 'Whether the cache was hit'
     value: ${{ steps.setup-node.outputs.cache-hit }}
@@ -54,16 +53,33 @@ runs:
       run: >-
         "${{ github.action_path }}/scripts/enable-corepack.sh"
 
-    - name: Setup Node.js ${{ inputs.node-version }}
+    - name: Verify package.json engines.node
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if ! jq -e '.engines.node' package.json >/dev/null 2>&1; then
+          echo "::error::package.json must specify engines.node." >&2
+          echo "Example: \"engines\": { \"node\": \"^26.0.0\" }" >&2
+          exit 1
+        fi
+
+    - name: Setup Node.js
       id: setup-node
       # v6.3.0
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
       with:
-        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.working-directory }}/package.json
         cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
         cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
         registry-url: ${{ inputs.registry-url }}
         scope: ${{ inputs.scope }}
+
+    - name: Set Node.js major version output
+      id: set-outputs
+      shell: bash
+      run: |
+        NODEJS_MAJOR=$(node --version | sed 's/^v//; s/\..*//')
+        echo "nodejs_major_version=$NODEJS_MAJOR" >> $GITHUB_OUTPUT
 
     - name: Clean install (if requested)
       if: ${{ inputs.clean-install == 'true' }}
