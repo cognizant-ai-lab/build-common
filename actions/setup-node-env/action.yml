@@ -7,18 +7,6 @@ description: >-
 author: 'Cognizant AI Lab'
 
 inputs:
-  node-version:
-    description: >-
-      Node.js version to use. If omitted, node-version-file is used.
-    required: false
-    default: ''
-  node-version-file:
-    description: >-
-      File containing the Node.js version to use when node-version is
-      omitted. Defaults to package.json, which actions/setup-node reads
-      from engines.node.
-    required: false
-    default: 'package.json'
   working-directory:
     description: 'Working directory for installing dependencies'
     required: false
@@ -65,24 +53,22 @@ runs:
       run: >-
         "${{ github.action_path }}/scripts/enable-corepack.sh"
 
-    - name: Resolve node version file path
-      id: resolve
-      if: ${{ inputs.node-version == '' }}
+    - name: Verify package.json engines.node
       shell: bash
-      env:
-        WORKING_DIR: ${{ inputs.working-directory }}
-        VERSION_FILE: ${{ inputs.node-version-file }}
+      working-directory: ${{ inputs.working-directory }}
       run: |
-        NODE_VERSION_FILE="${WORKING_DIR}/${VERSION_FILE}"
-        echo "node_version_file=${NODE_VERSION_FILE}" >> "${GITHUB_OUTPUT}"
+        if ! jq -e '.engines.node' package.json >/dev/null 2>&1; then
+          echo "::error::package.json must specify engines.node." >&2
+          echo "Example: \"engines\": { \"node\": \"^26.0.0\" }" >&2
+          exit 1
+        fi
 
-    - name: Setup Node.js ${{ inputs.node-version }}
+    - name: Setup Node.js
       id: setup-node
       # v6.3.0
       uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
       with:
-        node-version: ${{ inputs.node-version }}
-        node-version-file: ${{ steps.resolve.outputs.node_version_file }}
+        node-version-file: ${{ inputs.working-directory }}/package.json
         cache: ${{ inputs.use-cache == 'true' && 'yarn' || '' }}
         cache-dependency-path: ${{ inputs.working-directory }}/yarn.lock
         registry-url: ${{ inputs.registry-url }}
