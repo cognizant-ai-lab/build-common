@@ -1,0 +1,46 @@
+---
+name: 'Publish to PyPI'
+description: >-
+  Build and publish a Python package with PyPI Trusted Publishing.
+author: 'Cognizant AI Lab'
+
+inputs:
+  python-version:
+    description: 'Python version to use for building'
+    required: false
+    default: '3.10'
+  working-directory:
+    description: 'Working directory containing the Python package'
+    required: false
+    default: '.'
+  use-cache:
+    description: 'Use pip cache'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      # v6.2.0
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.use-cache == 'true' && 'pip' || '' }}
+
+    - name: Install build dependencies
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: python -m pip install build
+
+    - name: Build wheel and sdist
+      working-directory: ${{ inputs.working-directory }}
+      shell: bash
+      run: python -m build
+
+    - name: Publish to PyPI
+      # v1.14.0
+      # yamllint disable-line rule:line-length
+      uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
+      with:
+        packages-dir: ${{ inputs.working-directory }}/dist

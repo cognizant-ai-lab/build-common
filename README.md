@@ -21,6 +21,18 @@ distinguishes one action from another.
 See [Metadata syntax for GitHub Actions](https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions)
 for details on this constraint.
 
+The `publish-pypi` action builds and publishes a package from the caller's
+workflow. Keep the caller job's `pypi` environment and `id-token: write`
+permission in place so PyPI Trusted Publishing continues to authorize the
+repository's workflow:
+
+```yaml
+- name: Build and publish package
+  uses: cognizant-ai-lab/build-common/actions/publish-pypi@<release-sha>
+  with:
+    python-version: '3.10'
+```
+
 ## Migration Guide
 
 To migrate from inline workflow steps to these actions:
