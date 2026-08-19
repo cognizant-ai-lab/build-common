@@ -33,6 +33,16 @@ repository's workflow:
     python-version: '3.10'
 ```
 
+Pip caching is opt-in and requires a dependency file:
+
+```yaml
+- name: Build and publish package
+  uses: cognizant-ai-lab/build-common/actions/publish-pypi@<release-sha>
+  with:
+    use-cache: 'true'
+    cache-dependency-path: requirements.txt
+```
+
 ## Migration Guide
 
 To migrate from inline workflow steps to these actions:

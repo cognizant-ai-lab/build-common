@@ -16,7 +16,13 @@ inputs:
   use-cache:
     description: 'Use pip cache'
     required: false
-    default: 'true'
+    default: 'false'
+  cache-dependency-path:
+    description: >-
+      Dependency file used to create the pip cache key.
+      Caching is disabled unless this is provided and use-cache is true.
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -26,7 +32,13 @@ runs:
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
       with:
         python-version: ${{ inputs.python-version }}
-        cache: ${{ inputs.use-cache == 'true' && 'pip' || '' }}
+        cache: >-
+          ${{
+            inputs.use-cache == 'true' &&
+            inputs.cache-dependency-path != '' &&
+            'pip' || ''
+          }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     - name: Install build dependencies
       working-directory: ${{ inputs.working-directory }}
