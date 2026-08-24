@@ -24,7 +24,6 @@ actions:
     node: node24
     used_in:
       - .github/workflows/_checkmarx.yml
-      - .github/workflows/_publish-pypi.yml
       - .github/workflows/_python-quality-gate.yml
       - .github/workflows/lint-build-common-repo.yml
 
@@ -34,7 +33,7 @@ actions:
     node: node24
     used_in:
       - actions/setup-python-env/action.yml
-      - actions/publish-pypi/action.yml
+      - actions/build-python-dists/action.yml
 
   - action: actions/setup-node
     version: v6.3.0
@@ -106,13 +105,16 @@ actions:
     used_in:
       - actions/checkmarx-one/action.yml
 
+  # Not referenced by any file in this repo: this action wraps a
+  # Docker action, which breaks when nested in a composite action
+  # and cannot authenticate to PyPI from a reusable workflow.
+  # Consumers must call it directly from their own publish
+  # workflow, using the SHA recorded here.
   - action: pypa/gh-action-pypi-publish
     version: v1.14.0
     sha: cef221092ed1bacb1cc03d23a2d87d1d172e277b
     node: composite
-    used_in:
-      - .github/workflows/_publish-pypi.yml
-      - actions/publish-pypi/action.yml
+    used_in: []
 
   - action: slackapi/slack-github-action
     version: v3.0.1

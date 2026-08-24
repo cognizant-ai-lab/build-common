@@ -21,23 +21,41 @@ distinguishes one action from another.
 See [Metadata syntax for GitHub Actions](https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions)
 for details on this constraint.
 
-The `publish-pypi` action builds and publishes a package from the caller's
-workflow. Keep the caller job's `pypi` environment and `id-token: write`
-permission in place so PyPI Trusted Publishing continues to authorize the
-repository's workflow:
+### Publishing to PyPI
+
+The `build-python-dists` action builds a wheel and sdist into `dist/`. The
+upload step is deliberately *not* part of it: `pypa/gh-action-pypi-publish`
+must be called directly from the consumer's own publish workflow, because
+
+- it wraps a Docker action, and when nested inside a composite action the
+  `github.action_*` context resolves to the calling action's repository
+  (actions/runner#2473), so it tries to pull a nonexistent
+  `ghcr.io/<caller-repo>:<sha>` image; and
+- PyPI Trusted Publishing matches the OIDC `job_workflow_ref` claim, and
+  [reusable workflows are not supported](https://docs.pypi.org/trusted-publishers/troubleshooting/)
+  (pypi/warehouse#11096), so a shared reusable workflow cannot authenticate
+  either.
+
+Keep the caller job's `pypi` environment and `id-token: write` permission in
+place, and pin the publish action to the SHA recorded in
+[actions-manifest.yml](./actions-manifest.yml):
 
 ```yaml
-- name: Build and publish package
-  uses: cognizant-ai-lab/build-common/actions/publish-pypi@<release-sha>
+- name: Build distributions
+  uses: cognizant-ai-lab/build-common/actions/build-python-dists@<release-sha>
   with:
     python-version: '3.10'
+
+# v1.14.0
+- name: Publish to PyPI
+  uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
 ```
 
 Pip caching is opt-in and requires a dependency file:
 
 ```yaml
-- name: Build and publish package
-  uses: cognizant-ai-lab/build-common/actions/publish-pypi@<release-sha>
+- name: Build distributions
+  uses: cognizant-ai-lab/build-common/actions/build-python-dists@<release-sha>
   with:
     use-cache: 'true'
     cache-dependency-path: requirements.txt
