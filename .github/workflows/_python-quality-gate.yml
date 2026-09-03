@@ -138,6 +138,17 @@ name: Python Quality Gate
         required: false
         default: true
         type: boolean
+      test-python-versions:
+        description: >-
+          JSON list of Python versions to run the tests on
+          (e.g. '["3.12", "3.13", "3.14"]').  When set, tests
+          move out of the quality-gate job into a separate
+          unit-tests matrix job, one per version.  When empty
+          (default), tests run once inside the quality-gate
+          job on python-version.
+        required: false
+        default: ''
+        type: string
       pytest-markers:
         description: 'Pytest marker expression'
         required: false
@@ -230,52 +241,17 @@ jobs:
             scripts
             actions
 
-      - name: Install system packages
-        shell: bash
-        env:
-          EXTRA_PACKAGES: ${{ inputs.system-packages }}
-        run: |
-          sudo apt-get update
-          # shellcheck disable=SC2086
-          sudo apt-get install --yes shellcheck make $EXTRA_PACKAGES
-
-      # Detect which requirements files actually exist so
-      # setup-python-env skips missing ones gracefully
-      # (the inline defaults may reference files a consumer
-      # repo does not ship).
-      - name: Detect requirements files
-        id: detect-reqs
-        shell: bash
-        env:
-          REQ_FILE: ${{ inputs.requirements-file }}
-          REQ_BUILD_FILE: ${{ inputs.requirements-build-file }}
-        run: |
-          if [ -n "$REQ_FILE" ] && [ -f "$REQ_FILE" ]; then
-            echo "requirements-file=$REQ_FILE" >> "$GITHUB_OUTPUT"
-          else
-            echo "requirements-file=" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -n "$REQ_BUILD_FILE" ] \
-              && [ -f "$REQ_BUILD_FILE" ]; then
-            echo "requirements-build-file=$REQ_BUILD_FILE" \
-              >> "$GITHUB_OUTPUT"
-          else
-            echo "requirements-build-file=" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Compose the shared setup-python-env action instead
-      # of manually creating a venv.  The action handles
-      # Python installation, pip caching, and dependency
-      # installation via actions/setup-python.
-      - name: Setup Python environment
-        uses: ./.build-common/actions/setup-python-env
+      # Shared with the unit-tests job below: system
+      # packages, requirements detection and the
+      # setup-python-env action.
+      - name: Setup Python CI environment
+        uses: ./.build-common/actions/python-ci-setup
         with:
           python-version: ${{ inputs.python-version }}
-          requirements-file: >-
-            ${{ steps.detect-reqs.outputs.requirements-file }}
-          requirements-build-file: >-
-            ${{ steps.detect-reqs.outputs.requirements-build-file }}
           working-directory: ${{ inputs.working-directory }}
+          requirements-file: ${{ inputs.requirements-file }}
+          requirements-build-file: ${{ inputs.requirements-build-file }}
+          system-packages: ${{ inputs.system-packages }}
 
       # ── Validate lint-toolchain ──────────────────────
       # Fail fast when the caller passes an unrecognised
@@ -384,9 +360,14 @@ jobs:
         uses: ./.build-common/actions/run-zizmor
 
       # ── Test ──────────────────────────────────────────
+      # Skipped when test-python-versions is set; the
+      # unit-tests matrix job below runs the tests instead.
       - name: Run test command override
         if: >-
-          ${{ inputs.test-command-override != '' }}
+          ${{
+            inputs.test-python-versions == '' &&
+            inputs.test-command-override != ''
+          }}
         shell: bash
         env:
           TEST_CMD: ${{ inputs.test-command-override }}
@@ -397,6 +378,7 @@ jobs:
       - name: Run pytest
         if: >-
           ${{
+            inputs.test-python-versions == '' &&
             inputs.test-command-override == '' &&
             inputs.run-pytest
           }}
@@ -421,13 +403,123 @@ jobs:
       # Single step for both success and failure.
       # job.status provides the outcome automatically;
       # !cancelled() ensures we skip only on cancellation.
+      # When a test matrix is in use, the notify job below
+      # reports the combined result instead.
       - name: Notify Slack
         if: >-
           ${{
             !cancelled() &&
-            inputs.enable-slack
+            inputs.enable-slack &&
+            inputs.test-python-versions == ''
           }}
         uses: ./.build-common/actions/slack-notify
         with:
           status: ${{ job.status }}
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ── Unit tests across a Python version matrix ────────
+  # Only runs when test-python-versions is set.  Lint and
+  # the other checks stay in quality-gate on python-version;
+  # this job only sets up the environment and runs tests.
+  unit-tests:
+    name: Unit tests (${{ matrix.python-version }})
+    if: >-
+      ${{
+        inputs.test-python-versions != '' &&
+        (inputs.run-pytest || inputs.test-command-override != '')
+      }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.test-python-versions) }}
+
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout
+        # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Checkout build-common
+        # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: cognizant-ai-lab/build-common
+          ref: ${{ inputs.build-common-ref }}
+          path: .build-common
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            actions
+
+      - name: Setup Python CI environment
+        uses: ./.build-common/actions/python-ci-setup
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: ${{ inputs.working-directory }}
+          requirements-file: ${{ inputs.requirements-file }}
+          requirements-build-file: ${{ inputs.requirements-build-file }}
+          system-packages: ${{ inputs.system-packages }}
+
+      - name: Run test command override
+        if: ${{ inputs.test-command-override != '' }}
+        shell: bash
+        env:
+          TEST_CMD: ${{ inputs.test-command-override }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          bash -c "$TEST_CMD"
+
+      - name: Run pytest
+        if: ${{ inputs.test-command-override == '' }}
+        shell: bash
+        env:
+          PYTEST_MARKERS: ${{ inputs.pytest-markers }}
+          PYTEST_EXTRA: ${{ inputs.pytest-extra-args }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # shellcheck disable=SC2086
+          pytest --verbose -m "$PYTEST_MARKERS" $PYTEST_EXTRA
+
+  # ── Combined Slack notification ──────────────────────
+  # One message for the whole run when a test matrix is
+  # in use, instead of one per matrix job.
+  notify:
+    name: Notify Slack
+    needs: [quality-gate, unit-tests]
+    if: >-
+      ${{
+        !cancelled() &&
+        inputs.enable-slack &&
+        inputs.test-python-versions != ''
+      }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout build-common
+        # v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: cognizant-ai-lab/build-common
+          ref: ${{ inputs.build-common-ref }}
+          path: .build-common
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            actions
+
+      - name: Notify Slack
+        uses: ./.build-common/actions/slack-notify
+        with:
+          status: >-
+            ${{
+              contains(needs.*.result, 'failure') && 'failure'
+              || 'success'
+            }}
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
