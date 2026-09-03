@@ -1,0 +1,84 @@
+---
+# Composed by _python-quality-gate.yml (the reusable
+# workflow) -- see .github/workflows/ for the caller.
+#
+# Expects build-common to be checked out at .build-common
+# in the workspace, since composite actions cannot template
+# the path in a nested `uses:`.
+name: 'Python CI Setup'
+description: >-
+  Install system packages, detect which requirements files
+  exist, and set up the Python environment
+author: 'Cognizant AI Lab'
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.12'
+  working-directory:
+    description: 'Working directory for installing dependencies'
+    required: false
+    default: '.'
+  requirements-file:
+    description: 'Path to requirements.txt (skipped if missing)'
+    required: false
+    default: 'requirements.txt'
+  requirements-build-file:
+    description: >-
+      Path to requirements-build.txt (skipped if missing)
+    required: false
+    default: 'requirements-build.txt'
+  system-packages:
+    description: >-
+      Space-separated list of apt packages to install
+      (shellcheck and make are always included)
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system packages
+      shell: bash
+      env:
+        EXTRA_PACKAGES: ${{ inputs.system-packages }}
+      run: |
+        sudo apt-get update
+        # shellcheck disable=SC2086
+        sudo apt-get install --yes shellcheck make $EXTRA_PACKAGES
+
+    # Detect which requirements files actually exist so
+    # setup-python-env skips missing ones gracefully
+    # (the inline defaults may reference files a consumer
+    # repo does not ship).
+    - name: Detect requirements files
+      id: detect-reqs
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        REQ_FILE: ${{ inputs.requirements-file }}
+        REQ_BUILD_FILE: ${{ inputs.requirements-build-file }}
+      run: |
+        if [ -n "$REQ_FILE" ] && [ -f "$REQ_FILE" ]; then
+          echo "requirements-file=$REQ_FILE" >> "$GITHUB_OUTPUT"
+        else
+          echo "requirements-file=" >> "$GITHUB_OUTPUT"
+        fi
+        if [ -n "$REQ_BUILD_FILE" ] \
+            && [ -f "$REQ_BUILD_FILE" ]; then
+          echo "requirements-build-file=$REQ_BUILD_FILE" \
+            >> "$GITHUB_OUTPUT"
+        else
+          echo "requirements-build-file=" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Setup Python environment
+      uses: ./.build-common/actions/setup-python-env
+      with:
+        python-version: ${{ inputs.python-version }}
+        requirements-file: >-
+          ${{ steps.detect-reqs.outputs.requirements-file }}
+        requirements-build-file: >-
+          ${{ steps.detect-reqs.outputs.requirements-build-file }}
+        working-directory: ${{ inputs.working-directory }}
