@@ -426,7 +426,7 @@ jobs:
     if: >-
       ${{
         inputs.test-python-versions != '' &&
-        inputs.run-pytest
+        (inputs.run-pytest || inputs.test-command-override != '')
       }}
     runs-on: ubuntu-latest
 
