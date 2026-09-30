@@ -149,6 +149,17 @@ name: Python Quality Gate
         required: false
         default: ''
         type: string
+      test-os:
+        description: >-
+          JSON list of runner labels to run the tests on
+          (e.g. '["ubuntu-latest", "windows-latest"]').
+          Only used by the unit-tests matrix job, so it
+          needs test-python-versions.  Each OS runs every
+          version in test-python-versions.  system-packages
+          are installed only on Linux runners.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
       pytest-markers:
         description: 'Pytest marker expression'
         required: false
@@ -417,22 +428,29 @@ jobs:
           status: ${{ job.status }}
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  # ── Unit tests across a Python version matrix ────────
+  # ── Unit tests across a Python version x OS matrix ───
   # Only runs when test-python-versions is set.  Lint and
-  # the other checks stay in quality-gate on python-version;
-  # this job only sets up the environment and runs tests.
+  # the other checks stay in quality-gate on python-version
+  # and ubuntu-latest; this job only sets up the environment
+  # and runs tests.
   unit-tests:
-    name: Unit tests (${{ matrix.python-version }})
+    # Ubuntu cells keep the "Unit tests (3.x)" name so existing
+    # required status checks still match.
+    name: >-
+      Unit tests (${{ matrix.python-version }}${{
+        matrix.os != 'ubuntu-latest' && format(', {0}', matrix.os) || ''
+      }})
     if: >-
       ${{
         inputs.test-python-versions != '' &&
         (inputs.run-pytest || inputs.test-command-override != '')
       }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
+        os: ${{ fromJSON(inputs.test-os) }}
         python-version: ${{ fromJSON(inputs.test-python-versions) }}
 
     defaults:
