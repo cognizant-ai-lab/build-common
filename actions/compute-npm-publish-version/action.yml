@@ -1,0 +1,49 @@
+---
+name: 'Compute npm Publish Version'
+description: >-
+  Compute the npm package version and dist-tag for a publish
+  run from the GitHub event: a snapshot for a push to main,
+  the tag for a release, a prerelease for a manual run.
+author: 'Cognizant AI Lab'
+
+inputs:
+  package-json-path:
+    description: >-
+      Path to the package.json that holds the base version
+    required: true
+  dist-tag:
+    description: >-
+      npm dist-tag for a workflow_dispatch run. Push and
+      release runs ignore it.
+    required: false
+    default: 'prerelease'
+
+outputs:
+  version:
+    description: 'npm package version to publish'
+    value: ${{ steps.compute.outputs.version }}
+  dist-tag:
+    description: 'npm dist-tag to publish with'
+    value: ${{ steps.compute.outputs.dist_tag }}
+  sha:
+    description: 'Full Git SHA of the run'
+    value: ${{ steps.compute.outputs.sha }}
+  short-sha:
+    description: 'First 7 characters of the Git SHA'
+    value: ${{ steps.compute.outputs.short_sha }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compute version and dist-tag
+      id: compute
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        SHA: ${{ github.sha }}
+        RUN_NUMBER: ${{ github.run_number }}
+        RELEASE_TAG: ${{ github.event.release.tag_name }}
+        PACKAGE_JSON_PATH: ${{ inputs.package-json-path }}
+        DIST_TAG_INPUT: ${{ inputs.dist-tag }}
+      run: >-
+        "${{ github.action_path }}/scripts/compute-publish-version.sh"
