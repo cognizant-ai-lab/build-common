@@ -7,7 +7,10 @@ GraphQL ``createCommitOnBranch`` mutation instead of ``git push``.
 GitHub signs commits that a GitHub App (or ``GITHUB_TOKEN``) makes
 through the API, so they show as "Verified" and pass a "Require
 signed commits" ruleset.  The commit author is the token's bot;
-setting a custom author would make the commit unsigned.
+setting a custom author would make the commit unsigned.  See
+https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-bots
+and
+https://docs.github.com/en/graphql/reference/mutations#createcommitonbranch
 
 If the branch moves while the job runs, the local changes are
 re-applied on top of the new head (like ``git pull --rebase
