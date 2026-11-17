@@ -69,14 +69,14 @@ class TestApiCommitter:
         transport = FakeTransport(self.OK)
         assert self._committer(transport).run() == "abc"
         request: dict = transport.requests[0]
-        assert request["branch"] == {
+        assert request.get("branch") == {
             "repositoryNameWithOwner": "org/repo",
             "branchName": "main",
         }
-        assert request["message"] == {"headline": "Bump", "body": "body"}
-        assert request["expectedHeadOid"] == self._git(clone, "rev-parse", "HEAD")
+        assert request.get("message") == {"headline": "Bump", "body": "body"}
+        assert request.get("expectedHeadOid") == self._git(clone, "rev-parse", "HEAD")
         contents: str = base64.b64encode(b"a: 2\nkeep\nb: 1\n").decode()
-        assert request["fileChanges"] == {
+        assert request.get("fileChanges") == {
             "additions": [{"path": "values.yaml", "contents": contents}],
             "deletions": [],
         }
@@ -87,9 +87,9 @@ class TestApiCommitter:
         os.remove(clone / "other.yaml")
         transport = FakeTransport(self.OK)
         self._committer(transport, "new.yaml other.yaml values.yaml").run()
-        changes: dict = transport.requests[0]["fileChanges"]
-        assert [a["path"] for a in changes["additions"]] == ["new.yaml"]
-        assert changes["deletions"] == [{"path": "other.yaml"}]
+        changes: dict = transport.requests[0].get("fileChanges")
+        assert [a.get("path") for a in changes.get("additions")] == ["new.yaml"]
+        assert changes.get("deletions") == [{"path": "other.yaml"}]
 
     def test_staged_replacement_is_one_change(self, clone: Path) -> None:
         """A staged deletion that is recreated is sent once, as an addition."""
@@ -176,9 +176,9 @@ class TestApiCommitter:
         transport = FakeTransport(self.MOVED, self.OK)
         assert self._committer(transport, "values.yaml other.yaml").run() == "abc"
         retry: dict = transport.requests[1]
-        assert retry["fileChanges"]["deletions"] == [{"path": "other.yaml"}]
-        assert retry["expectedHeadOid"] == self._git(other, "rev-parse", "HEAD")
-        contents: str = retry["fileChanges"]["additions"][0]["contents"]
+        assert retry.get("fileChanges").get("deletions") == [{"path": "other.yaml"}]
+        assert retry.get("expectedHeadOid") == self._git(other, "rev-parse", "HEAD")
+        contents: str = retry.get("fileChanges").get("additions")[0].get("contents")
         assert base64.b64decode(contents) == b"a: 2\nkeep\nb: 2\n"
 
     def test_conflict_fails(self, clone: Path, tmp_path: Path) -> None:

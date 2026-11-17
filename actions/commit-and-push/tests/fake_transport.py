@@ -16,5 +16,5 @@ class FakeTransport:
 
     def __call__(self, body: dict) -> dict:
         """Record ``body`` and return the next reply."""
-        self.requests.append(body["variables"]["input"])
+        self.requests.append(body.get("variables").get("input"))
         return self.replies.pop(0)
