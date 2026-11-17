@@ -55,6 +55,18 @@ class TestApiCommitter:
         monkeypatch.chdir(work)
         return work
 
+    @pytest.fixture(autouse=True)
+    def skip_sync(
+        self, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Skip ``sync_checkout``: ``FakeTransport`` oids are not real commits."""
+        if "checkout" not in request.node.name:
+            monkeypatch.setattr(ApiCommitter, "sync_checkout", self._no_sync)
+
+    @staticmethod
+    def _no_sync(committer: ApiCommitter, branch: str, oid: str) -> None:
+        """Do nothing in place of ``sync_checkout``."""
+
     @staticmethod
     def _committer(
         transport: FakeTransport, files: str = "values.yaml"
@@ -147,6 +159,18 @@ class TestApiCommitter:
         assert self._git(clone, "rev-parse", "HEAD") == published[0]
         assert self._git(clone, "status", "--porcelain") == ""
 
+    def test_checkout_ignores_later_commits(self, clone: Path, tmp_path: Path) -> None:
+        """A commit after the published one does not show as a local reversion."""
+        published: list[str] = ["later"]
+        (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
+        ApiCommitter(
+            {"INPUT_FILE_PATH": "values.yaml other.yaml", "INPUT_COMMIT_MESSAGE": "m"},
+            transport=functools.partial(self._publish, tmp_path, published),
+            repository="org/repo",
+        ).run()
+        assert self._git(clone, "rev-parse", "HEAD") == published[1]
+        assert self._git(clone, "status", "--porcelain") == ""
+
     def test_no_changes(self, clone: Path) -> None:
         """No API call is made when nothing changed."""
         transport = FakeTransport()
@@ -166,8 +190,14 @@ class TestApiCommitter:
     def _publish(self, tmp_path: Path, published: list[str], body: dict) -> dict:
         """Stand in for GitHub: push the same change from another clone."""
         other: Path = self._push_other_change(tmp_path, "a: 2\nkeep\nb: 1\n")
-        published.append(self._git(other, "rev-parse", "HEAD"))
-        return {"data": {"createCommitOnBranch": {"commit": {"oid": "x"}}}}
+        oid: str = self._git(other, "rev-parse", "HEAD")
+        published.append(oid)
+        if len(published) > 1:
+            # Another commit lands on the branch before the fetch.
+            (other / "other.yaml").write_text("later\n")
+            self._git(other, "commit", "--quiet", "-am", "later")
+            self._git(other, "push", "--quiet", "origin", "main")
+        return {"data": {"createCommitOnBranch": {"commit": {"oid": oid}}}}
 
     def test_retries_after_head_moved(self, clone: Path, tmp_path: Path) -> None:
         """When main moves, the change is rebased onto the new head and retried."""

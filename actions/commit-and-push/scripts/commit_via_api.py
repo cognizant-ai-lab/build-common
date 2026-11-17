@@ -195,10 +195,15 @@ class ApiCommitter:
             )
         return {"additions": additions, "deletions": deletions}
 
-    def sync_checkout(self, branch: str) -> None:
-        """Move the local branch and index to the commit just published."""
+    def sync_checkout(self, branch: str, oid: str) -> None:
+        """Move the local branch and index to the published commit ``oid``.
+
+        Reset to ``oid``, not the fetched head: a later commit on the
+        branch would leave its files stale in the tree, and a second
+        run would then revert them.
+        """
         self._git("fetch", "--quiet", "origin", branch)
-        self._git("reset", "--quiet", "FETCH_HEAD")
+        self._git("reset", "--quiet", oid)
 
     def _post_graphql(self, body: dict) -> dict:
         """POST ``body`` to the GraphQL API and return the JSON reply."""
@@ -284,7 +289,7 @@ class ApiCommitter:
                 self.rebase_onto_remote(branch)
                 continue
             self._logger.info("Committed %s", commit.get("url", commit.get("oid")))
-            self.sync_checkout(branch)
+            self.sync_checkout(branch, commit.get("oid"))
             return commit.get("oid")
         return None
 
