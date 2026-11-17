@@ -14,18 +14,6 @@ inputs:
   commit_message:
     description: Commit message
     required: true
-  author_name:
-    description: Ignored
-    required: false
-    deprecationMessage: >-
-      Ignored. The commit author is the token's bot; a custom
-      author would make the commit unsigned.
-  author_email:
-    description: Ignored
-    required: false
-    deprecationMessage: >-
-      Ignored. The commit author is the token's bot; a custom
-      author would make the commit unsigned.
   github_token:
     description: >-
       GitHub App installation token (or GITHUB_TOKEN) with
