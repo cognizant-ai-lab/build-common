@@ -101,6 +101,41 @@ class TestApiCommitter:
         assert [a["path"] for a in changes["additions"]] == ["new.yaml"]
         assert changes["deletions"] == [{"path": "other.yaml"}]
 
+    def test_staged_replacement_is_one_change(self, clone: Path) -> None:
+        """A staged deletion that is recreated is sent once, as an addition."""
+        self._git(clone, "rm", "--quiet", "values.yaml")
+        (clone / "values.yaml").write_text("new\n")
+        transport = FakeTransport(OK)
+        self._committer(transport).run()
+        changes: dict = transport.requests[0].get("fileChanges")
+        assert [a.get("path") for a in changes.get("additions")] == ["values.yaml"]
+        assert changes.get("deletions") == []
+
+    def test_clean_filter_applies(self, clone: Path) -> None:
+        """Contents come from the index, so clean filters such as Git LFS apply."""
+        self._git(clone, "config", "filter.upper.clean", "tr a-z A-Z")
+        (clone / ".gitattributes").write_text("values.yaml filter=upper\n")
+        (clone / "values.yaml").write_text("changed\n")
+        transport = FakeTransport(OK)
+        self._committer(transport).run()
+        addition: dict = transport.requests[0].get("fileChanges").get("additions")[0]
+        assert base64.b64decode(addition.get("contents")) == b"CHANGED\n"
+
+    def test_symlink_fails(self, clone: Path) -> None:
+        """A symlink is refused instead of committing its target's contents."""
+        os.symlink("/etc/hostname", clone / "link.yaml")
+        with pytest.raises(ValueError, match="symlink"):
+            self._committer(FakeTransport(), "link.yaml").run()
+
+    def test_unmerged_fails(self, clone: Path, tmp_path: Path) -> None:
+        """Conflict-marked files are not committed."""
+        self._push_other_change(tmp_path, "a: 3\nkeep\nb: 1\n")
+        (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
+        self._git(clone, "commit", "--quiet", "-am", "local")
+        subprocess.run(["git", "pull", "--quiet", "--no-rebase"], cwd=clone)
+        with pytest.raises(ValueError, match="conflicts"):
+            self._committer(FakeTransport()).run()
+
     def test_no_changes(self, clone: Path) -> None:
         """No API call is made when nothing changed."""
         transport = FakeTransport()

@@ -28,7 +28,6 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 from typing import Callable, Mapping
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
@@ -105,13 +104,14 @@ class ApiCommitter:
                 "HEAD is detached; check out the branch to commit to"
             ) from err
 
-    def file_changes(self) -> dict:
-        """Return the ``FileChanges`` input for the changed pathspecs.
+    @staticmethod
+    def _git_bytes(*args: str) -> bytes:
+        """Run ``git`` in the current directory and return raw stdout."""
+        result = subprocess.run(["git", *args], check=True, capture_output=True)
+        return result.stdout
 
-        Paths in ``git status --porcelain`` are relative to the
-        repository root, so file contents are read from there.
-        """
-        root: Path = Path(self._git("rev-parse", "--show-toplevel").strip())
+    def changed_paths(self) -> list[str]:
+        """Return the root-relative paths that ``git status`` shows as changed."""
         status: str = self._git(
             "status",
             "--porcelain=v1",
@@ -121,27 +121,80 @@ class ApiCommitter:
             *self._pathspecs,
         )
         entries: list[str] = status.split("\0")
-        additions: list[dict] = []
-        deletions: list[dict] = []
+        paths: list[str] = []
         index: int = 0
         while index < len(entries):
             entry: str = entries[index]
             index += 1
             if not entry:
                 continue
-            code, path = entry[:2], entry[3:]
-            if code[0] in "RC":
-                # A staged rename is followed by its source path.
-                if code[0] == "R":
-                    deletions.append({"path": entries[index]})
+            paths.append(entry[3:])
+            if entry[0] in "RC":
+                # A staged rename or copy is followed by its source path.
+                paths.append(entries[index])
                 index += 1
-            if "D" in code:
+        return paths
+
+    def index_modes(self, root: str, paths: list[str]) -> dict[str, str]:
+        """Return the index file mode of each of ``paths`` that is in the index."""
+        listing: str = self._git("-C", root, "ls-files", "--stage", "-z", "--", *paths)
+        modes: dict[str, str] = {}
+        for entry in listing.split("\0"):
+            if entry:
+                info, _, path = entry.partition("\t")
+                modes[path] = info.split(" ")[0]
+        return modes
+
+    def file_changes(self) -> dict:
+        """Return the ``FileChanges`` input for the changed pathspecs.
+
+        The changes are staged first and read back from the index, so
+        Git's clean filters (Git LFS pointers, line endings) apply and a
+        deleted-then-recreated file shows as one change.
+        """
+        if self._git("ls-files", "--unmerged"):
+            raise ValueError("The checkout has unresolved merge conflicts")
+        root: str = self._git("rev-parse", "--show-toplevel").strip()
+        paths: list[str] = self.changed_paths()
+        if not paths:
+            return {"additions": [], "deletions": []}
+        modes: dict[str, str] = self.index_modes(root, paths)
+        # ``git add`` fails on a path that is in neither the index nor the tree.
+        addable: list[str] = [
+            path
+            for path in paths
+            if path in modes or os.path.lexists(os.path.join(root, path))
+        ]
+        if addable:
+            self._git("-C", root, "add", "--all", "--", *addable)
+        diff: str = self._git(
+            "-C",
+            root,
+            "diff",
+            "--cached",
+            "--no-renames",
+            "--name-status",
+            "-z",
+            "HEAD",
+            "--",
+            *paths,
+        )
+        fields: list[str] = diff.split("\0")
+        modes = self.index_modes(root, paths)
+        additions: list[dict] = []
+        deletions: list[dict] = []
+        for code, path in zip(fields[0::2], fields[1::2]):
+            if code == "D":
                 deletions.append({"path": path})
-            else:
-                contents: bytes = (root / path).read_bytes()
-                additions.append(
-                    {"path": path, "contents": base64.b64encode(contents).decode()}
-                )
+                continue
+            if modes.get(path) == "120000":
+                raise ValueError(f"{path} is a symlink; the API cannot commit it")
+            contents: bytes = self._git_bytes(
+                "-C", root, "cat-file", "blob", f":{path}"
+            )
+            additions.append(
+                {"path": path, "contents": base64.b64encode(contents).decode()}
+            )
         return {"additions": additions, "deletions": deletions}
 
     def _post_graphql(self, body: dict) -> dict:
@@ -214,7 +267,7 @@ class ApiCommitter:
         branch: str = self.branch()
         for attempt in range(1, self.MAX_ATTEMPTS + 1):
             changes: dict = self.file_changes()
-            if not changes["additions"] and not changes["deletions"]:
+            if not changes.get("additions") and not changes.get("deletions"):
                 self._logger.info("No changes to commit.")
                 return None
             head: str = self._git("rev-parse", "HEAD").strip()
