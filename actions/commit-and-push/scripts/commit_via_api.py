@@ -32,11 +32,6 @@ from typing import Callable, Mapping
 
 from head_moved_error import HeadMovedError
 
-logging.basicConfig(format="%(message)s", level=logging.INFO)
-
-# Sends a GraphQL request body and returns the decoded JSON response.
-Transport = Callable[[dict], dict]
-
 
 class ApiCommitter:
     """Commits changed files to the current branch via the GraphQL API."""
@@ -57,7 +52,7 @@ class ApiCommitter:
     def __init__(
         self,
         env: Mapping[str, str],
-        transport: Transport | None = None,
+        transport: Callable[[dict], dict] | None = None,
         repository: str | None = None,
     ) -> None:
         """Store the inputs.
@@ -71,7 +66,8 @@ class ApiCommitter:
         self._env: Mapping[str, str] = env
         self._pathspecs: list[str] = env.get("INPUT_FILE_PATH", "").split()
         self._message: str = env.get("INPUT_COMMIT_MESSAGE", "")
-        self._transport: Transport = transport or self._post_graphql
+        # Sends a GraphQL request body and returns the decoded JSON reply.
+        self._transport: Callable[[dict], dict] = transport or self._post_graphql
         self._repository: str | None = repository
         self._logger: logging.Logger = logging.getLogger(self.__class__.__name__)
 
@@ -290,6 +286,7 @@ class ApiCommitter:
     @staticmethod
     def main() -> None:
         """Entry point."""
+        logging.basicConfig(format="%(message)s", level=logging.INFO)
         try:
             ApiCommitter(os.environ).run()
         except (ValueError, RuntimeError, HeadMovedError, OSError) as err:
