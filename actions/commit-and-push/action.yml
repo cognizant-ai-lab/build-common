@@ -2,42 +2,50 @@
 name: Commit and push
 
 description: >-
-  Stage a file, commit, pull/rebase, and push to the default branch.
-  Wraps EndBug/add-and-commit with the org's pinned SHA and the
-  --rebase --autostash pull strategy.
+  Commit changed files to the checked-out branch through the
+  GitHub API. GitHub signs the commit for the token's GitHub
+  App, so it passes a "Require signed commits" rule. If the
+  branch moves first, the changes are rebased and retried.
 
 inputs:
   file_path:
-    description: File to stage and commit
+    description: Space-separated files (pathspecs) to commit
     required: true
   commit_message:
     description: Commit message
     required: true
   author_name:
-    description: Git author name
+    description: Ignored
     required: false
-    default: GitHub Actions
+    deprecationMessage: >-
+      Ignored. The commit author is the token's bot; a custom
+      author would make the commit unsigned.
   author_email:
-    description: Git author email
+    description: Ignored
     required: false
-    default: actions@github.com
+    deprecationMessage: >-
+      Ignored. The commit author is the token's bot; a custom
+      author would make the commit unsigned.
   github_token:
-    description: Token for GitHub API calls
+    description: >-
+      GitHub App installation token (or GITHUB_TOKEN) with
+      contents write access. A PAT makes an unsigned commit.
     required: false
     default: ${{ github.token }}
+  working_directory:
+    description: Directory of the checked-out repository
+    required: false
+    default: '.'
 
 runs:
   using: composite
   steps:
     - name: Commit and push changes
-      # v9.1.4
-      # yamllint disable-line rule:line-length
-      uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5
-      with:
-        add: ${{ inputs.file_path }}
-        message: ${{ inputs.commit_message }}
-        author_name: ${{ inputs.author_name }}
-        author_email: ${{ inputs.author_email }}
-        pull: --rebase --autostash
-        push: true
-        github_token: ${{ inputs.github_token }}
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        INPUT_FILE_PATH: ${{ inputs.file_path }}
+        INPUT_COMMIT_MESSAGE: ${{ inputs.commit_message }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: >-
+        python3 "$GITHUB_ACTION_PATH/scripts/commit_via_api.py"
