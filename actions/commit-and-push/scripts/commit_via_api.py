@@ -196,14 +196,8 @@ class ApiCommitter:
     def rebase_onto_remote(self, branch: str) -> None:
         """Re-apply the local changes on top of the remote branch head."""
         self._git("fetch", "--quiet", "origin", branch)
-        self._git(
-            "stash",
-            "push",
-            "--include-untracked",
-            "--quiet",
-            "--",
-            *self._pathspecs,
-        )
+        # Stash the whole tree: a pathspec of a deleted file fails.
+        self._git("stash", "push", "--include-untracked", "--quiet")
         self._git("merge", "--ff-only", "--quiet", "FETCH_HEAD")
         try:
             self._git("stash", "pop", "--quiet")

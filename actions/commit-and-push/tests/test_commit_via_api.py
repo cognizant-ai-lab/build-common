@@ -121,9 +121,11 @@ class TestApiCommitter:
         """When main moves, the change is rebased onto the new head and retried."""
         other: Path = self._push_other_change(tmp_path, "a: 1\nkeep\nb: 2\n")
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
+        self._git(clone, "rm", "--quiet", "other.yaml")
         transport = FakeTransport(MOVED, OK)
-        assert self._committer(transport).run() == "abc"
+        assert self._committer(transport, "values.yaml other.yaml").run() == "abc"
         retry: dict = transport.requests[1]
+        assert retry["fileChanges"]["deletions"] == [{"path": "other.yaml"}]
         assert retry["expectedHeadOid"] == self._git(other, "rev-parse", "HEAD")
         contents: str = retry["fileChanges"]["additions"][0]["contents"]
         assert base64.b64decode(contents) == b"a: 2\nkeep\nb: 2\n"
