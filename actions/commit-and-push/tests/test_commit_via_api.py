@@ -115,7 +115,7 @@ class TestApiCommitter:
         assert changes.get("deletions") == []
 
     def test_clean_filter_applies(self, clone: Path) -> None:
-        """Contents come from the index, so clean filters such as Git LFS apply."""
+        """Contents come from the index, so clean filters apply."""
         self._git(clone, "config", "filter.upper.clean", "tr a-z A-Z")
         (clone / ".gitattributes").write_text("values.yaml filter=upper\n")
         (clone / "values.yaml").write_text("changed\n")
@@ -132,6 +132,13 @@ class TestApiCommitter:
         self._committer(transport, ":(literal)a[b].yaml").run()
         additions: list = transport.requests[0].get("fileChanges").get("additions")
         assert [a.get("path") for a in additions] == ["a[b].yaml"]
+
+    def test_lfs_file_fails(self, clone: Path) -> None:
+        """A Git LFS file is refused: the API cannot upload its object."""
+        (clone / ".gitattributes").write_text("values.yaml filter=lfs\n")
+        (clone / "values.yaml").write_text("changed\n")
+        with pytest.raises(ValueError, match="LFS"):
+            self._committer(FakeTransport()).run()
 
     def test_symlink_fails(self, clone: Path) -> None:
         """A symlink is refused instead of committing its target's contents."""

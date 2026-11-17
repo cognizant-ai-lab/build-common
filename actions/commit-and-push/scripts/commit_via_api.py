@@ -145,11 +145,33 @@ class ApiCommitter:
                 modes[path] = info.split(" ")[0]
         return modes
 
+    def refuse_lfs(self, root: str, paths: list[str]) -> None:
+        """Fail if any of ``paths`` is tracked by Git LFS.
+
+        The API commits only the LFS pointer and cannot upload the
+        object, so a fresh checkout could not download the content.
+        """
+        attrs: list[str] = self._git(
+            "--literal-pathspecs",
+            "-C",
+            root,
+            "check-attr",
+            "-z",
+            "filter",
+            "--",
+            *paths,
+        ).split("\0")
+        for path, value in zip(attrs[0::3], attrs[2::3]):
+            if value == "lfs":
+                raise ValueError(
+                    f"{path} is tracked by Git LFS; the API cannot commit it"
+                )
+
     def file_changes(self) -> dict:
         """Return the ``FileChanges`` input for the changed pathspecs.
 
         The changes are staged first and read back from the index, so
-        Git's clean filters (Git LFS pointers, line endings) apply and a
+        Git's clean filters (such as line endings) apply and a
         deleted-then-recreated file shows as one change.
         """
         if self._git("ls-files", "--unmerged"):
@@ -158,6 +180,7 @@ class ApiCommitter:
         paths: list[str] = self.changed_paths()
         if not paths:
             return {"additions": [], "deletions": []}
+        self.refuse_lfs(root, paths)
         modes: dict[str, str] = self.index_modes(root, paths)
         # ``paths`` are file names, so later calls use --literal-pathspecs.
         # ``git add`` fails on a path that is in neither the index nor the tree.
