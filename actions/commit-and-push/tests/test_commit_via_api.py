@@ -15,29 +15,18 @@ from pathlib import Path
 
 import pytest
 
-from commit_via_api import ApiCommitter, HeadMovedError
-
-
-class FakeTransport:
-    """Records GraphQL requests and replays canned replies."""
-
-    def __init__(self, *replies: dict) -> None:
-        """Store the replies to return, in order."""
-        self.replies: list[dict] = list(replies)
-        self.requests: list[dict] = []
-
-    def __call__(self, body: dict) -> dict:
-        """Record ``body`` and return the next reply."""
-        self.requests.append(body["variables"]["input"])
-        return self.replies.pop(0)
-
-
-OK: dict = {"data": {"createCommitOnBranch": {"commit": {"oid": "abc", "url": "u"}}}}
-MOVED: dict = {"errors": [{"message": 'Expected branch to point to "x"'}]}
+from commit_via_api import ApiCommitter
+from fake_transport import FakeTransport
+from head_moved_error import HeadMovedError
 
 
 class TestApiCommitter:
     """Tests for ``ApiCommitter``."""
+
+    OK: dict = {
+        "data": {"createCommitOnBranch": {"commit": {"oid": "abc", "url": "u"}}}
+    }
+    MOVED: dict = {"errors": [{"message": 'Expected branch to point to "x"'}]}
 
     @staticmethod
     def _git(cwd: Path, *args: str) -> str:
@@ -77,7 +66,7 @@ class TestApiCommitter:
         """A changed file is sent as an addition against the local HEAD."""
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
         (clone / "other.yaml").write_text("not selected\n")
-        transport = FakeTransport(OK)
+        transport = FakeTransport(self.OK)
         assert self._committer(transport).run() == "abc"
         request: dict = transport.requests[0]
         assert request["branch"] == {
@@ -96,7 +85,7 @@ class TestApiCommitter:
         """Space-separated pathspecs cover new, changed and deleted files."""
         (clone / "new.yaml").write_text("n\n")
         os.remove(clone / "other.yaml")
-        transport = FakeTransport(OK)
+        transport = FakeTransport(self.OK)
         self._committer(transport, "new.yaml other.yaml values.yaml").run()
         changes: dict = transport.requests[0]["fileChanges"]
         assert [a["path"] for a in changes["additions"]] == ["new.yaml"]
@@ -106,7 +95,7 @@ class TestApiCommitter:
         """A staged deletion that is recreated is sent once, as an addition."""
         self._git(clone, "rm", "--quiet", "values.yaml")
         (clone / "values.yaml").write_text("new\n")
-        transport = FakeTransport(OK)
+        transport = FakeTransport(self.OK)
         self._committer(transport).run()
         changes: dict = transport.requests[0].get("fileChanges")
         assert [a.get("path") for a in changes.get("additions")] == ["values.yaml"]
@@ -117,7 +106,7 @@ class TestApiCommitter:
         self._git(clone, "config", "filter.upper.clean", "tr a-z A-Z")
         (clone / ".gitattributes").write_text("values.yaml filter=upper\n")
         (clone / "values.yaml").write_text("changed\n")
-        transport = FakeTransport(OK)
+        transport = FakeTransport(self.OK)
         self._committer(transport).run()
         addition: dict = transport.requests[0].get("fileChanges").get("additions")[0]
         assert base64.b64decode(addition.get("contents")) == b"CHANGED\n"
@@ -184,7 +173,7 @@ class TestApiCommitter:
         other: Path = self._push_other_change(tmp_path, "a: 1\nkeep\nb: 2\n")
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
         self._git(clone, "rm", "--quiet", "other.yaml")
-        transport = FakeTransport(MOVED, OK)
+        transport = FakeTransport(self.MOVED, self.OK)
         assert self._committer(transport, "values.yaml other.yaml").run() == "abc"
         retry: dict = transport.requests[1]
         assert retry["fileChanges"]["deletions"] == [{"path": "other.yaml"}]
@@ -197,12 +186,12 @@ class TestApiCommitter:
         self._push_other_change(tmp_path, "a: 3\nkeep\nb: 1\n")
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
         with pytest.raises(RuntimeError, match="conflict"):
-            self._committer(FakeTransport(MOVED)).run()
+            self._committer(FakeTransport(self.MOVED)).run()
 
     def test_gives_up_after_max_attempts(self, clone: Path) -> None:
         """A head that keeps moving fails after ``MAX_ATTEMPTS``."""
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
-        transport = FakeTransport(*[MOVED] * ApiCommitter.MAX_ATTEMPTS)
+        transport = FakeTransport(*[self.MOVED] * ApiCommitter.MAX_ATTEMPTS)
         with pytest.raises(HeadMovedError):
             self._committer(transport).run()
 

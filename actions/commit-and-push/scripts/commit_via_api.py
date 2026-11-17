@@ -30,14 +30,12 @@ import urllib.error
 import urllib.request
 from typing import Callable, Mapping
 
+from head_moved_error import HeadMovedError
+
 logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 # Sends a GraphQL request body and returns the decoded JSON response.
 Transport = Callable[[dict], dict]
-
-
-class HeadMovedError(Exception):
-    """The branch head on GitHub is no longer ``expectedHeadOid``."""
 
 
 class ApiCommitter:
