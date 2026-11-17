@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from api_commit_error import ApiCommitError
 from commit_via_api import ApiCommitter
 from fake_transport import FakeTransport
 from head_moved_error import HeadMovedError
@@ -185,7 +186,7 @@ class TestApiCommitter:
         """A remote change to the same line cannot be rebased."""
         self._push_other_change(tmp_path, "a: 3\nkeep\nb: 1\n")
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
-        with pytest.raises(RuntimeError, match="conflict"):
+        with pytest.raises(ApiCommitError, match="conflict"):
             self._committer(FakeTransport(self.MOVED)).run()
 
     def test_gives_up_after_max_attempts(self, clone: Path) -> None:
@@ -200,7 +201,7 @@ class TestApiCommitter:
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
         error: dict = {"errors": [{"message": "Resource not accessible"}]}
         transport = FakeTransport(error)
-        with pytest.raises(RuntimeError, match="Resource not accessible"):
+        with pytest.raises(ApiCommitError, match="Resource not accessible"):
             self._committer(transport).run()
 
     def test_detached_head_fails(self, clone: Path) -> None:

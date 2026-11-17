@@ -30,6 +30,7 @@ import urllib.error
 import urllib.request
 from typing import Callable, Mapping
 
+from api_commit_error import ApiCommitError
 from head_moved_error import HeadMovedError
 
 
@@ -214,7 +215,7 @@ class ApiCommitter:
             with urllib.request.urlopen(request, timeout=60) as response:
                 return json.load(response)
         except urllib.error.HTTPError as err:
-            raise RuntimeError(
+            raise ApiCommitError(
                 f"GraphQL request failed: HTTP {err.code} {err.read().decode()}"
             ) from err
 
@@ -243,7 +244,7 @@ class ApiCommitter:
             text: str = "; ".join(error.get("message", "") for error in errors)
             if self.HEAD_MOVED_TEXT in text:
                 raise HeadMovedError(text)
-            raise RuntimeError(f"createCommitOnBranch failed: {text}")
+            raise ApiCommitError(f"createCommitOnBranch failed: {text}")
         return reply.get("data", {}).get("createCommitOnBranch", {}).get("commit", {})
 
     def rebase_onto_remote(self, branch: str) -> None:
@@ -255,7 +256,7 @@ class ApiCommitter:
         try:
             self._git("stash", "pop", "--quiet")
         except subprocess.CalledProcessError as err:
-            raise RuntimeError(
+            raise ApiCommitError(
                 f"Local changes conflict with the new head of {branch}: "
                 f"{err.stderr.strip()}"
             ) from err
@@ -290,7 +291,7 @@ class ApiCommitter:
         logging.basicConfig(format="%(message)s", level=logging.INFO)
         try:
             ApiCommitter(os.environ).run()
-        except (ValueError, RuntimeError, HeadMovedError, OSError) as err:
+        except (ValueError, ApiCommitError, OSError) as err:
             logging.getLogger(ApiCommitter.__name__).error("::error::%s", err)
             sys.exit(1)
         except subprocess.CalledProcessError as err:
