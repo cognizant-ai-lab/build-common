@@ -8,6 +8,7 @@ access is needed.
 from __future__ import annotations
 
 import base64
+import functools
 import os
 import subprocess
 from pathlib import Path
@@ -136,6 +137,20 @@ class TestApiCommitter:
         with pytest.raises(ValueError, match="conflicts"):
             self._committer(FakeTransport()).run()
 
+    def test_checkout_matches_published_commit(
+        self, clone: Path, tmp_path: Path
+    ) -> None:
+        """After the commit, local HEAD is the published commit and is clean."""
+        published: list[str] = []
+        (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
+        ApiCommitter(
+            {"INPUT_FILE_PATH": "values.yaml", "INPUT_COMMIT_MESSAGE": "m"},
+            transport=functools.partial(self._publish, tmp_path, published),
+            repository="org/repo",
+        ).run()
+        assert self._git(clone, "rev-parse", "HEAD") == published[0]
+        assert self._git(clone, "status", "--porcelain") == ""
+
     def test_no_changes(self, clone: Path) -> None:
         """No API call is made when nothing changed."""
         transport = FakeTransport()
@@ -151,6 +166,12 @@ class TestApiCommitter:
         self._git(other, "commit", "--quiet", "-am", "other")
         self._git(other, "push", "--quiet", "origin", "main")
         return other
+
+    def _publish(self, tmp_path: Path, published: list[str], body: dict) -> dict:
+        """Stand in for GitHub: push the same change from another clone."""
+        other: Path = self._push_other_change(tmp_path, "a: 2\nkeep\nb: 1\n")
+        published.append(self._git(other, "rev-parse", "HEAD"))
+        return {"data": {"createCommitOnBranch": {"commit": {"oid": "x"}}}}
 
     def test_retries_after_head_moved(self, clone: Path, tmp_path: Path) -> None:
         """When main moves, the change is rebased onto the new head and retried."""

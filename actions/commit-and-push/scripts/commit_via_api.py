@@ -197,6 +197,11 @@ class ApiCommitter:
             )
         return {"additions": additions, "deletions": deletions}
 
+    def sync_checkout(self, branch: str) -> None:
+        """Move the local branch and index to the commit just published."""
+        self._git("fetch", "--quiet", "origin", branch)
+        self._git("reset", "--quiet", "FETCH_HEAD")
+
     def _post_graphql(self, body: dict) -> dict:
         """POST ``body`` to the GraphQL API and return the JSON reply."""
         url: str = (
@@ -280,6 +285,7 @@ class ApiCommitter:
                 self.rebase_onto_remote(branch)
                 continue
             self._logger.info("Committed %s", commit.get("url", commit.get("oid")))
+            self.sync_checkout(branch)
             return commit.get("oid")
         return None
 
