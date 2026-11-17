@@ -133,7 +133,13 @@ class TestApiCommitter:
         self._push_other_change(tmp_path, "a: 3\nkeep\nb: 1\n")
         (clone / "values.yaml").write_text("a: 2\nkeep\nb: 1\n")
         self._git(clone, "commit", "--quiet", "-am", "local")
-        subprocess.run(["git", "pull", "--quiet", "--no-rebase"], cwd=clone)
+        merge = subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", "pull", "--no-rebase"],
+            cwd=clone,
+            capture_output=True,
+            text=True,
+        )
+        assert "CONFLICT" in merge.stdout
         with pytest.raises(ValueError, match="conflicts"):
             self._committer(FakeTransport()).run()
 
