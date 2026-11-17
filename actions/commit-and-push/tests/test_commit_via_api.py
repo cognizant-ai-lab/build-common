@@ -124,6 +124,15 @@ class TestApiCommitter:
         addition: dict = transport.requests[0].get("fileChanges").get("additions")[0]
         assert base64.b64decode(addition.get("contents")) == b"CHANGED\n"
 
+    def test_bracketed_name_is_literal(self, clone: Path) -> None:
+        """A selected ``a[b].yaml`` does not also commit ``ab.yaml``."""
+        (clone / "a[b].yaml").write_text("x\n")
+        (clone / "ab.yaml").write_text("y\n")
+        transport = FakeTransport(self.OK)
+        self._committer(transport, ":(literal)a[b].yaml").run()
+        additions: list = transport.requests[0].get("fileChanges").get("additions")
+        assert [a.get("path") for a in additions] == ["a[b].yaml"]
+
     def test_symlink_fails(self, clone: Path) -> None:
         """A symlink is refused instead of committing its target's contents."""
         os.symlink("/etc/hostname", clone / "link.yaml")

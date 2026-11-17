@@ -135,7 +135,9 @@ class ApiCommitter:
 
     def index_modes(self, root: str, paths: list[str]) -> dict[str, str]:
         """Return the index file mode of each of ``paths`` that is in the index."""
-        listing: str = self._git("-C", root, "ls-files", "--stage", "-z", "--", *paths)
+        listing: str = self._git(
+            "--literal-pathspecs", "-C", root, "ls-files", "--stage", "-z", "--", *paths
+        )
         modes: dict[str, str] = {}
         for entry in listing.split("\0"):
             if entry:
@@ -157,6 +159,7 @@ class ApiCommitter:
         if not paths:
             return {"additions": [], "deletions": []}
         modes: dict[str, str] = self.index_modes(root, paths)
+        # ``paths`` are file names, so later calls use --literal-pathspecs.
         # ``git add`` fails on a path that is in neither the index nor the tree.
         addable: list[str] = [
             path
@@ -164,8 +167,9 @@ class ApiCommitter:
             if path in modes or os.path.lexists(os.path.join(root, path))
         ]
         if addable:
-            self._git("-C", root, "add", "--all", "--", *addable)
+            self._git("--literal-pathspecs", "-C", root, "add", "--all", "--", *addable)
         diff: str = self._git(
+            "--literal-pathspecs",
             "-C",
             root,
             "diff",
