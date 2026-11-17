@@ -225,6 +225,7 @@ class ApiCommitter:
             {
                 "query": self.MUTATION,
                 "variables": {
+                    # GraphQL input field names are camelCase in GitHub's API.
                     "input": {
                         "branch": {
                             "repositoryNameWithOwner": self.repository(),
