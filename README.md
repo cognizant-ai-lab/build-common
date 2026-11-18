@@ -61,6 +61,26 @@ Pip caching is opt-in and requires a dependency file:
     cache-dependency-path: requirements.txt
 ```
 
+### Computing an npm publish version
+
+The `compute-npm-publish-version` action reads the base version from a
+`package.json` and returns the `version` and `dist-tag` for the run:
+
+| Trigger             | Version                            | Dist-tag            |
+|---------------------|------------------------------------|---------------------|
+| `push`              | `<base>-main.<short_sha>.<run>`    | `main`              |
+| `release`           | release tag without the `v` prefix | `latest`            |
+| `workflow_dispatch` | `<base>-pr.<short_sha>.<run>`      | `dist-tag` input    |
+
+```yaml
+- name: Compute version and dist-tag
+  id: compute
+  uses: cognizant-ai-lab/build-common/actions/compute-npm-publish-version@<release-sha>
+  with:
+    package-json-path: packages/ui-common/package.json
+    dist-tag: ${{ inputs.dist_tag }}
+```
+
 ## Migration Guide
 
 To migrate from inline workflow steps to these actions:
